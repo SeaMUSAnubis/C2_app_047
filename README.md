@@ -1,100 +1,102 @@
-# Starter Code Template — Cohort 2
+# UEBA Endpoint Monitoring
 
-Empty starter template for AI20K Build Cohort 2 team repositories. Includes pre-configured AI usage logging hooks for Claude Code, Cursor, Codex, Gemini CLI, Antigravity, and GitHub Copilot.
+UEBA Endpoint Monitoring là web app phát hiện hành vi bất thường của user/device từ log endpoint theo hướng insider threat và account compromise. MVP dùng CERT r4.2-style logs để preprocessing, train Isolation Forest, sinh anomaly score/risk context và chuẩn bị tích hợp dashboard + backend API + endpoint agent.
 
-## Structure
+## Cấu trúc repo
 
-```
-├── scripts/
-│   ├── _pyrun.sh             # Cross-platform Python launcher (bash)
-│   ├── _pyrun.cmd            # Cross-platform Python launcher (Windows)
-│   ├── setup_hooks.sh        # One-time pre-push hook installer (POSIX)
-│   ├── setup_hooks.ps1       # One-time pre-push hook installer (Windows)
-│   ├── log_hook.py           # AI tool hook handler (Claude / Cursor / Codex / Gemini / Copilot)
-│   ├── log_antigravity.py    # Auto-log hook for Antigravity
-│   ├── log_manual.py         # Manual log for ChatGPT / web tools
-│   └── submit_log.py         # Submits logs on git push
-├── .agents/                  # Antigravity rules + workflows
-├── .claude/  .codex/  .cursor/  .gemini/  .github/hooks/   # Per-tool hook configs
-├── .env.example
-├── JOURNAL.md                # Weekly journal — product journey & learnings
-└── WORKLOG.md                # Technical decisions, task assignments, brainstorming
+```text
+backend/        FastAPI app, API, auth, database, service layer
+frontend/       React/Next.js dashboard
+agent/          Endpoint agent hoặc mock agent gửi log
+ml/             Preprocessing, feature engineering, training, scoring
+data/           Raw/sample/interim/processed data và schema
+artifacts/      Output pipeline: feature matrix, model, predictions, metadata
+reports/        Báo cáo phân tích, training report, figures
+docs/           PRD, architecture, API/data contract, references
+scripts/        Hook scripts và lệnh tiện ích mỏng
+infra/          Docker/deploy/reverse proxy config
+tests/          Integration và e2e tests cấp repo
 ```
 
-## Getting Started
+Chi tiết chuẩn thư mục nằm ở [docs/REPO_STRUCTURE_STANDARD.md](docs/REPO_STRUCTURE_STANDARD.md).
 
-### 1. Clone and install pre-push hook
+## Data
 
-**Linux / macOS / Git Bash:**
+Repo tách dữ liệu theo vòng đời:
+
+- `data/raw/cert-r4.2/`: raw CERT dataset, local only, không commit.
+- `data/sample/cert-r4.2-small/`: sample nhỏ để smoke test/demo nhanh.
+- `data/interim/` và `data/processed/`: dữ liệu trung gian/generated, không commit.
+- `data/schemas/`: schema/data contract nên commit.
+
+## ML pipeline hiện có
+
+Chạy preprocessing trên sample:
+
 ```bash
-git clone <repo-url>
-cd <repo>
+python ml/ueba_ml/pipelines/preprocess.py --input-dir data/sample/cert-r4.2-small
+```
+
+Chạy preprocessing trên raw dataset:
+
+```bash
+python ml/ueba_ml/pipelines/preprocess.py --input-dir data/raw/cert-r4.2 --chunksize 250000
+```
+
+Train Isolation Forest từ feature matrix:
+
+```bash
+python ml/ueba_ml/pipelines/train.py
+```
+
+Output chính:
+
+- `artifacts/preprocessing/iforest_feature_matrix.csv`
+- `artifacts/preprocessing/iforest_feature_columns.json`
+- `artifacts/models/iforest_model.joblib`
+- `artifacts/models/iforest_metadata.json`
+- `artifacts/models/iforest_anomaly_scores.csv`
+- `artifacts/evaluation/iforest_feature_lift.csv`
+- `reports/preprocessing_report.md`
+- `reports/iforest_training_report.md`
+
+## Module ownership
+
+| Mảng | Thư mục | Deliverable |
+|---|---|---|
+| Product/PM | `docs/`, `JOURNAL.md`, `WORKLOG.md` | PRD, user story, task assignment |
+| Backend | `backend/`, `infra/` | API, auth, DB, services |
+| Frontend | `frontend/` | Dashboard, login, alert/user/device/log views |
+| Data/ML | `ml/`, `data/`, `artifacts/`, `reports/` | Feature pipeline, model training, scoring, reports |
+| Agent | `agent/` | Mock/real endpoint agent, normal/anomaly simulator |
+| QA/DevOps | `tests/`, `.github/`, `infra/` | CI, integration/e2e tests, deploy config |
+
+## AI logging hooks
+
+Repo vẫn giữ hook logging của AI20K Build Cohort 2 trong `scripts/` và các thư mục `.agents/`, `.claude/`, `.codex/`, `.cursor/`, `.gemini/`, `.github/hooks/`.
+
+Cài pre-push hook một lần:
+
+```bash
 bash scripts/setup_hooks.sh
 ```
 
-**Windows PowerShell:**
+Hoặc trên Windows PowerShell:
+
 ```powershell
-git clone <repo-url>
-cd <repo>
 powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1
 ```
 
-### 2. Configure environment
+Với ChatGPT/web tools, log thủ công:
 
 ```bash
-cp .env.example .env       # macOS / Linux / Git Bash
-# copy .env.example .env   # Windows cmd
-```
-
-Fill in `AI_LOG_SERVER` and `AI_LOG_API_KEY` (provided by the course).
-
-### 3. Build your project
-
-This is an empty starter — pick any language/framework. The hooks are language-agnostic; they only need Python on the host (any of `python3`, `python`, or `py` works).
-
-## Weekly Journal
-
-Update **[JOURNAL.md](./JOURNAL.md)** at the end of every week:
-
-- Features shipped
-- AI tools used and how they helped
-- Hardest problem of the week and how you solved it
-- What you'd do differently
-- Plan for next week
-
-> JOURNAL.md **must be updated** before each PR — it is your learning record for the course.
-
-## Worklog
-
-Update **[WORKLOG.md](./WORKLOG.md)** whenever your team makes a technical decision or changes direction:
-
-- **Technical decisions** — why this approach over alternatives?
-- **Task assignments** — who does what, by when
-- **Brainstorming** — options considered, pros / cons, conclusion
-- **Important bugs** — root cause and fix
-
-## AI Logging
-
-Prompts and tool calls are **automatically logged** when you use any supported AI tool (Claude Code, Cursor, Codex, Gemini, Antigravity, Copilot). No manual steps needed after running `setup_hooks`.
-
-For ChatGPT or other web tools, log manually:
-
-```bash
-# POSIX
 bash scripts/_pyrun.sh scripts/log_manual.py --tool chatgpt --prompt "<what you did>"
-
-# Windows
-scripts\_pyrun.cmd scripts\log_manual.py --tool chatgpt --prompt "<what you did>"
 ```
 
-### Python requirements
+## Tài liệu
 
-The hook system needs **one** of: `python3`, `python`, or `py` on PATH.
-
-| OS | Recommended install |
-|---|---|
-| Windows | Python 3 from [python.org](https://www.python.org/downloads/) — installer adds both `python` and `py` to PATH |
-| Ubuntu / Debian | `sudo apt install python3` (already preinstalled on most distros) |
-| macOS | `brew install python3` or use system Python 3 |
-
-The `scripts/_pyrun.*` wrappers detect whichever is available — students do not need to alias `python3` → `python`.
+- [docs/BRIEF.md](docs/BRIEF.md)
+- [docs/PRD.md](docs/PRD.md)
+- [docs/UEBA_REQUIREMENTS.md](docs/UEBA_REQUIREMENTS.md)
+- [docs/REPO_STRUCTURE_STANDARD.md](docs/REPO_STRUCTURE_STANDARD.md)
+- [docs/UI_FLOW.svg](docs/UI_FLOW.svg)
