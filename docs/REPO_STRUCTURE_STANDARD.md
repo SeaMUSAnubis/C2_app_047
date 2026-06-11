@@ -330,21 +330,21 @@ Người phụ trách chính: DevOps/backend.
 
 ---
 
-## 5. Ánh xạ từ repo hiện tại sang cấu trúc đích
+## 5. Ánh xạ đã áp dụng từ repo cũ sang cấu trúc đích
 
-| Hiện tại | Chuẩn đích | Ghi chú |
+| Trước refactor | Sau refactor | Ghi chú |
 |---|---|---|
-| `preprocessing/ueba_preprocess.py` | `ml/ueba_ml/pipelines/preprocess.py` | Giữ `preprocessing/` tạm thời được, nhưng code mới nên vào `ml/`. |
-| `preprocessing/README.md` | `ml/README.md` hoặc `ml/notebooks/README.md` | Gộp hướng dẫn pipeline ML vào một nơi. |
-| `models/train_iforest.py` | `ml/ueba_ml/pipelines/train.py` | `models/` ở root nên dành cho artifact hoặc bỏ hẳn để tránh nhầm. |
+| `preprocessing/ueba_preprocess.py` | `ml/ueba_ml/pipelines/preprocess.py` | Code preprocessing chính nằm trong package ML. |
+| `preprocessing/README.md` | `ml/README.md` | Gộp hướng dẫn pipeline ML vào một nơi. |
+| `models/train_iforest.py` | `ml/ueba_ml/pipelines/train.py` | Root `models/` không còn là nơi đặt source code. |
 | `models/iforest_model.joblib` | `artifacts/models/iforest_model.joblib` | Model binary là artifact, không phải source code. |
 | `models/iforest_*.csv/json` | `artifacts/models/` hoặc `artifacts/evaluation/` | Tùy loại output. |
 | `models/figures/` | `reports/figures/` hoặc `artifacts/evaluation/figures/` | Hình cho người đọc để `reports`; hình pipeline để `artifacts`. |
 | `artifacts/preprocessing/` | `artifacts/preprocessing/` | Đang đúng hướng. |
-| `dataset/` | `data/raw/cert-r4.2/` | Nên ignore. |
-| `data-template/` | `data/sample/cert-r4.2-small/` | Nên đổi tên để rõ là sample data. |
+| `dataset/` | `data/raw/cert-r4.2/` | Raw dataset được ignore. |
+| `data-template/` | `data/sample/cert-r4.2-small/` | Đổi tên để rõ là sample data. |
 | `reports/` | `reports/` | Đang đúng hướng. |
-| `docs/2506.23446v2.pdf` | `docs/references/2506.23446v2.pdf` | Paper/reference nên gom vào `docs/references/`. |
+| `docs/2506.23446v2.pdf` | `docs/references/2506.23446v2.pdf` | Paper/reference gom vào `docs/references/`. |
 | `docs/PRD.md`, `docs/BRIEF.md` | `docs/PRD.md`, `docs/BRIEF.md` | Đang đúng hướng. |
 
 ---
@@ -437,7 +437,7 @@ Trước khi merge một module mới, cần có:
 
 1. Tạo `data/README.md`, `artifacts/README.md`, `reports/README.md`.
 2. Thêm `docs/API_CONTRACT.md`, `docs/DATA_CONTRACT.md`, `docs/ARCHITECTURE.md`.
-3. Giữ `preprocessing/` và `models/` tạm thời, nhưng ghi rõ deprecated trong README.
+3. Không tạo thêm source mới trong root `preprocessing/` hoặc root `models/`.
 4. Bổ sung `.gitignore` cho raw data và artifact lớn.
 
 ### Phase 2: Tách module theo ownership
