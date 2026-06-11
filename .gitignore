@@ -17,4 +17,23 @@ build/
 
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl
+.ai-log/**/*.jsonl
 AGENTS.md
+
+# Data lifecycle
+data/raw/
+data/interim/
+data/processed/
+data/sample/*/.codegraph/
+
+# Generated ML artifacts
+artifacts/**/*.csv
+artifacts/**/*.joblib
+artifacts/**/*.pkl
+artifacts/**/*.parquet
+artifacts/**/*.png
+
+!artifacts/**/README.md
+!artifacts/**/metadata.json
+!artifacts/**/feature_columns.json
+!artifacts/**/iforest_feature_columns.json
