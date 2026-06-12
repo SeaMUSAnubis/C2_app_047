@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-python ml/ueba_ml/pipelines/train.py "$@"
+python src/services/ueba_ml/pipelines/train.py "$@"
