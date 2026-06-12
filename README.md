@@ -5,17 +5,20 @@ UEBA Endpoint Monitoring là web app phát hiện hành vi bất thường của
 ## Cấu trúc repo
 
 ```text
-backend/        FastAPI app, API, auth, database, service layer
-frontend/       React/Next.js dashboard
-agent/          Endpoint agent hoặc mock agent gửi log
-ml/             Preprocessing, feature engineering, training, scoring
-data/           Raw/sample/interim/processed data và schema
-artifacts/      Output pipeline: feature matrix, model, predictions, metadata
-reports/        Báo cáo phân tích, training report, figures
-docs/           PRD, architecture, API/data contract, references
-scripts/        Hook scripts và lệnh tiện ích mỏng
-infra/          Docker/deploy/reverse proxy config
-tests/          Integration và e2e tests cấp repo
+src/
+  agents/       Agent graph, nodes, tools, state theo starter template
+  api/          FastAPI routes
+  models/       Pydantic schemas
+  services/     Business logic và UEBA ML pipelines
+tests/          pytest suite
+docs/           PRD, architecture, API/data contract, references, guide
+eval/           Evaluation evidence và reports
+presentation/   Demo Day slides/assets
+scripts/        AI logging hooks và helper scripts
+.github/        CI/CD workflows + Copilot hook config
+Dockerfile      API container
+docker-compose.yml
+Makefile
 ```
 
 Chi tiết chuẩn thư mục nằm ở [docs/REPO_STRUCTURE_STANDARD.md](docs/REPO_STRUCTURE_STANDARD.md).
@@ -25,28 +28,28 @@ Chi tiết chuẩn thư mục nằm ở [docs/REPO_STRUCTURE_STANDARD.md](docs/R
 Repo tách dữ liệu theo vòng đời:
 
 - `data/raw/cert-r4.2/`: raw CERT dataset, local only, không commit.
-- `data/sample/cert-r4.2-small/`: sample nhỏ để smoke test/demo nhanh.
-- `data/interim/` và `data/processed/`: dữ liệu trung gian/generated, không commit.
-- `data/schemas/`: schema/data contract nên commit.
+- `data/sample/cert-r4.2-small/`: sample nhỏ để smoke test/demo nhanh, local only.
+- `artifacts/`: feature matrix, model binary, scores, local/generated.
+- Schema và data contract nằm trong `docs/DATA_CONTRACT.md`.
 
 ## ML pipeline hiện có
 
 Chạy preprocessing trên sample:
 
 ```bash
-python ml/ueba_ml/pipelines/preprocess.py --input-dir data/sample/cert-r4.2-small
+python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/sample/cert-r4.2-small
 ```
 
 Chạy preprocessing trên raw dataset:
 
 ```bash
-python ml/ueba_ml/pipelines/preprocess.py --input-dir data/raw/cert-r4.2 --chunksize 250000
+python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/raw/cert-r4.2 --chunksize 250000
 ```
 
 Train Isolation Forest từ feature matrix:
 
 ```bash
-python ml/ueba_ml/pipelines/train.py
+python src/services/ueba_ml/pipelines/train.py
 ```
 
 Output chính:
@@ -57,19 +60,18 @@ Output chính:
 - `artifacts/models/iforest_metadata.json`
 - `artifacts/models/iforest_anomaly_scores.csv`
 - `artifacts/evaluation/iforest_feature_lift.csv`
-- `reports/preprocessing_report.md`
-- `reports/iforest_training_report.md`
+- `eval/results/preprocessing_report.md`
+- `eval/results/iforest_training_report.md`
 
 ## Module ownership
 
 | Mảng | Thư mục | Deliverable |
 |---|---|---|
 | Product/PM | `docs/`, `JOURNAL.md`, `WORKLOG.md` | PRD, user story, task assignment |
-| Backend | `backend/`, `infra/` | API, auth, DB, services |
-| Frontend | `frontend/` | Dashboard, login, alert/user/device/log views |
-| Data/ML | `ml/`, `data/`, `artifacts/`, `reports/` | Feature pipeline, model training, scoring, reports |
-| Agent | `agent/` | Mock/real endpoint agent, normal/anomaly simulator |
-| QA/DevOps | `tests/`, `.github/`, `infra/` | CI, integration/e2e tests, deploy config |
+| API/backend | `src/api/`, `src/models/`, `src/main.py` | FastAPI app, schemas, service API |
+| Data/ML | `src/services/ueba_ml/`, `data/`, `artifacts/`, `eval/` | Feature pipeline, model training, scoring, reports |
+| Agent/LLM workflow | `src/agents/`, `src/services/` | Alert explanation workflow and services |
+| QA/DevOps | `tests/`, `.github/`, `Dockerfile`, `Makefile` | CI, tests, deploy config |
 
 ## AI logging hooks
 
