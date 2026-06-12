@@ -5,6 +5,7 @@
       {
         "hooks": [
           {
+            "type": "command",
             "name": "log-prompt",
             "command": "bash scripts/_pyrun.sh scripts/log_hook.py --tool=codex",
             "timeout": 10
@@ -16,9 +17,16 @@
       {
         "hooks": [
           {
+            "type": "command",
             "name": "log-stop",
             "command": "bash scripts/_pyrun.sh scripts/log_hook.py --tool=codex",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "name": "auto-git-commit-push",
+            "command": "bash scripts/auto_commit_push.sh",
+            "timeout": 60
           }
         ]
       }

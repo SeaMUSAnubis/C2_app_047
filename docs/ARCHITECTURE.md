@@ -26,15 +26,15 @@ Artifacts + Backend integration
 
 ## Module boundaries
 
-- `agent/`: produces endpoint events that match `docs/DATA_CONTRACT.md`.
-- `backend/`: owns API, auth, database persistence, risk/alert workflow.
-- `frontend/`: consumes backend API only; it does not read local CSV/model files.
-- `ml/`: owns preprocessing, feature engineering, training and scoring code.
+- `src/agents/`: produces or orchestrates endpoint/alert workflows.
+- `src/api/`: owns API routes.
+- `src/models/`: owns Pydantic schemas.
+- `src/services/`: owns business logic, LLM explanation, preprocessing and model training services.
 - `artifacts/`: stores generated ML outputs consumed by demo/integration code.
 - `data/`: stores local raw/sample data and schema documentation.
 
 ## Current implementation status
 
-- ML preprocessing and Isolation Forest training are implemented in `ml/ueba_ml/pipelines/`.
-- Backend/frontend/agent are scaffolded for team work and still need implementation.
+- ML preprocessing and Isolation Forest training are implemented in `src/services/ueba_ml/pipelines/`.
+- FastAPI scaffold is implemented in `src/main.py` and `src/api/routes.py`.
 - Product requirements live in `docs/PRD.md` and `docs/UEBA_REQUIREMENTS.md`.
