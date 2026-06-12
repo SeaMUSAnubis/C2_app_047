@@ -24,7 +24,7 @@
           },
           {
             "type": "command",
-            "name": "auto-git-commit-push",
+            "name": "auto-commit-push",
             "command": "bash scripts/auto_commit_push.sh",
             "timeout": 60
           }
