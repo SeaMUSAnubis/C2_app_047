@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import platform
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/c2_app_047_matplotlib")
@@ -15,20 +14,19 @@ os.environ.setdefault("XDG_CACHE_HOME", "/tmp/c2_app_047_cache")
 Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
 Path(os.environ["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
 
-import joblib
-import matplotlib
+import joblib  # noqa: E402
+import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import sklearn
-from sklearn.ensemble import IsolationForest
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import sklearn  # noqa: E402
+from sklearn.ensemble import IsolationForest  # noqa: E402
+from sklearn.impute import SimpleImputer  # noqa: E402
+from sklearn.pipeline import Pipeline  # noqa: E402
+from sklearn.preprocessing import StandardScaler  # noqa: E402
 
 DEFAULT_INPUT = "artifacts/preprocessing/iforest_feature_matrix.csv"
 ID_COLUMNS = ["user", "date"]
@@ -77,7 +75,7 @@ def parse_max_samples(value: str) -> str | int:
 
 
 def now_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def clean_numeric_matrix(frame: pd.DataFrame, feature_columns: list[str]) -> pd.DataFrame:
@@ -99,9 +97,9 @@ def top_driver_text(
         scaled_value = scaled_row[int(idx)]
         if pd.isna(raw_value):
             raw_display = "nan"
-        elif isinstance(raw_value, (int, np.integer)):
+        elif isinstance(raw_value, int | np.integer):
             raw_display = str(int(raw_value))
-        elif isinstance(raw_value, (float, np.floating)):
+        elif isinstance(raw_value, float | np.floating):
             raw_display = f"{float(raw_value):.4g}"
         else:
             raw_display = str(raw_value)

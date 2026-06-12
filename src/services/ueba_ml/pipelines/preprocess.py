@@ -5,21 +5,20 @@ import argparse
 import json
 import math
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/c2_app_047_matplotlib")
 os.environ.setdefault("XDG_CACHE_HOME", "/tmp/c2_app_047_cache")
 Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
 Path(os.environ["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
 
-import matplotlib
+import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt
-import pandas as pd
-
+import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd  # noqa: E402
 
 DATE_FORMAT = "%m/%d/%Y %H:%M:%S"
 WORK_START_HOUR = 7
@@ -85,9 +84,7 @@ def combine_sum(frames: list[pd.DataFrame]) -> pd.DataFrame:
     return combined.groupby(level=[0, 1], sort=False).sum(numeric_only=True)
 
 
-def append_partial(
-    partials: list[pd.DataFrame], grouped: pd.DataFrame, flush_every: int
-) -> None:
+def append_partial(partials: list[pd.DataFrame], grouped: pd.DataFrame, flush_every: int) -> None:
     if grouped.empty:
         return
     partials.append(grouped)
@@ -112,9 +109,7 @@ def base_event_frame(chunk: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, objec
     chunk["weekday"] = dt.dt.weekday.astype("int16")
     chunk["is_weekend"] = chunk["weekday"] >= 5
     chunk["is_after_hours"] = (
-        (chunk["hour"] < WORK_START_HOUR)
-        | (chunk["hour"] >= WORK_END_HOUR)
-        | chunk["is_weekend"]
+        (chunk["hour"] < WORK_START_HOUR) | (chunk["hour"] >= WORK_END_HOUR) | chunk["is_weekend"]
     )
     stats["min_timestamp"] = dt.min()
     stats["max_timestamp"] = dt.max()
@@ -282,9 +277,7 @@ def process_event_file(
         summary["chunks"] = int(summary["chunks"]) + 1
         event_chunk, chunk_stats = base_event_frame(chunk)
         summary["rows"] = int(summary["rows"]) + int(chunk_stats["rows"])
-        summary["bad_date_rows"] = int(summary["bad_date_rows"]) + int(
-            chunk_stats["bad_date_rows"]
-        )
+        summary["bad_date_rows"] = int(summary["bad_date_rows"]) + int(chunk_stats["bad_date_rows"])
         if event_chunk.empty:
             continue
         chunk_min = chunk_stats.get("min_timestamp")
@@ -298,8 +291,7 @@ def process_event_file(
         append_partial(partials, aggregate_fn(event_chunk), flush_every)
         if progress_every > 0 and int(summary["chunks"]) % progress_every == 0:
             print(
-                f"    {filename}: {summary['chunks']:,} chunks, "
-                f"{summary['rows']:,} rows read",
+                f"    {filename}: {summary['chunks']:,} chunks, {summary['rows']:,} rows read",
                 flush=True,
             )
 
@@ -489,7 +481,9 @@ def finalize_features(
     return features, matrix, numeric_features
 
 
-def write_visualizations(features: pd.DataFrame, matrix: pd.DataFrame, output_dir: Path) -> list[str]:
+def write_visualizations(
+    features: pd.DataFrame, matrix: pd.DataFrame, output_dir: Path
+) -> list[str]:
     figure_dir = output_dir / "figures"
     figure_dir.mkdir(parents=True, exist_ok=True)
     outputs: list[str] = []
