@@ -12,7 +12,7 @@ Date: 2026-06-13
 
 ## Completed Work
 
-- Added SQLite-backed backend storage in `src/services/database.py`.
+- Added PostgreSQL-backed backend storage in `src/services/database.py`.
 - Created schema initialization for:
   - `app_accounts`
   - `users`
@@ -38,17 +38,26 @@ Date: 2026-06-13
 - Updated `docs/API_CONTRACT.md` with implemented request/response examples.
 - Added backend env settings to `.env.example`.
 - Added API tests for health, login, auth protection, RBAC, seed reads, and idempotent log ingest.
+- Migrated runtime persistence away from SQLite to PostgreSQL using `DATABASE_URL`.
+- Added docker-compose PostgreSQL service for local development.
+- Added Mistral Chat Completions integration for alert explanations:
+  - endpoint: `https://api.mistral.ai/v1/chat/completions`
+  - auth: `Authorization: Bearer <MISTRAL_API_KEY>`
+  - default model: `mistral-small-latest`
+  - rule-based fallback remains available when the key is missing or the API errors.
 
 ## Verification
 
 - `ruff check src tests`: passed.
-- `timeout 60s pytest -q`: passed, `7 passed in 0.48s`.
+- `timeout 60s pytest -q`: passed with `4 passed, 5 skipped`.
+- Skipped tests are PostgreSQL integration tests because this local environment does not currently have `psycopg` installed and no `TEST_DATABASE_URL` was provided.
+- `python - <<'PY' ... from src.main import app ... PY`: app imports successfully without initializing a SQLite database.
 
 ## Notes
 
 - The workbook filename in the request was `047_UEBA.xlxs`, but the actual file is `docs/047_UEBA.xlsx`.
 - The workbook itself was not modified.
-- Runtime SQLite files are ignored by `.gitignore`.
+- SQLite is no longer used by backend runtime or tests.
 
 ## Remaining Assigned Work From Workbook
 

@@ -1,6 +1,11 @@
 import pytest
 
-from tests.conftest import get_test_client
+from tests.conftest import get_test_client, postgres_tests_enabled
+
+requires_postgres = pytest.mark.skipif(
+    not postgres_tests_enabled(),
+    reason="PostgreSQL integration tests require psycopg and TEST_DATABASE_URL",
+)
 
 
 @pytest.mark.asyncio
@@ -13,8 +18,9 @@ async def test_health_endpoint() -> None:
 
 
 @pytest.mark.asyncio
+@requires_postgres
 async def test_login_and_me_endpoint() -> None:
-    async with get_test_client() as client:
+    async with get_test_client(init_db=True) as client:
         login = await client.post("/api/auth/login", json={"email": "admin@demo.com", "password": "admin123"})
         assert login.status_code == 200
         token = login.json()["access_token"]
@@ -26,16 +32,18 @@ async def test_login_and_me_endpoint() -> None:
 
 
 @pytest.mark.asyncio
+@requires_postgres
 async def test_protected_endpoint_requires_token() -> None:
-    async with get_test_client() as client:
+    async with get_test_client(init_db=True) as client:
         response = await client.get("/api/users")
 
         assert response.status_code == 403
 
 
 @pytest.mark.asyncio
+@requires_postgres
 async def test_analyst_cannot_create_user() -> None:
-    async with get_test_client() as client:
+    async with get_test_client(init_db=True) as client:
         login = await client.post("/api/auth/login", json={"email": "analyst@demo.com", "password": "analyst123"})
         token = login.json()["access_token"]
 
@@ -54,8 +62,9 @@ async def test_analyst_cannot_create_user() -> None:
 
 
 @pytest.mark.asyncio
+@requires_postgres
 async def test_admin_can_read_seed_users_and_devices() -> None:
-    async with get_test_client() as client:
+    async with get_test_client(init_db=True) as client:
         token = await _admin_token(client)
 
         users = await client.get("/api/users", headers={"Authorization": f"Bearer {token}"})
@@ -68,8 +77,9 @@ async def test_admin_can_read_seed_users_and_devices() -> None:
 
 
 @pytest.mark.asyncio
+@requires_postgres
 async def test_ingest_log_is_idempotent_by_source_id() -> None:
-    async with get_test_client() as client:
+    async with get_test_client(init_db=True) as client:
         token = await _admin_token(client)
         payload = {
             "source_id": "pytest:logon:1",
