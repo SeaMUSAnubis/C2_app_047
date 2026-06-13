@@ -45,11 +45,18 @@ Date: 2026-06-13
   - auth: `Authorization: Bearer <MISTRAL_API_KEY>`
   - default model: `mistral-small-latest`
   - rule-based fallback remains available when the key is missing or the API errors.
+- Added service-level test cases for:
+  - Mistral request URL, bearer header, model, messages, temperature, max tokens, and text response parsing.
+  - Mistral HTTP error fallback to rule-based explanation.
+  - Missing `MISTRAL_API_KEY` fallback behavior.
+  - PostgreSQL schema initialization using identity columns, references, indexes, and `ON CONFLICT`.
+  - PostgreSQL log ingest upsert using `%s` placeholders, `ON CONFLICT(source_id)`, and `RETURNING *`.
+  - PostgreSQL filter builders using `%s` placeholders.
 
 ## Verification
 
 - `ruff check src tests`: passed.
-- `timeout 60s pytest -q`: passed with `4 passed, 5 skipped`.
+- `timeout 60s pytest -q`: passed with `10 passed, 5 skipped`.
 - Skipped tests are PostgreSQL integration tests because this local environment does not currently have `psycopg` installed and no `TEST_DATABASE_URL` was provided.
 - `python - <<'PY' ... from src.main import app ... PY`: app imports successfully without initializing a SQLite database.
 
