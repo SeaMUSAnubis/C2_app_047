@@ -15,4 +15,4 @@ presentation/ Demo Day materials
 scripts/       AI logging and helper scripts
 ```
 
-Project-specific architecture details remain in `docs/ARCHITECTURE.md`.
+Project-specific architecture details remain in `docs/architecture/ARCHITECTURE.md`.
