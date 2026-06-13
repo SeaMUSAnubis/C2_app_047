@@ -33,6 +33,8 @@ GET  /api/models/{model_version}/metrics
 
 ## Implemented in Sprint 3 backend
 
+Runtime persistence uses PostgreSQL through `DATABASE_URL`; SQLite is not used.
+
 ### Auth
 
 `POST /api/auth/login`
@@ -165,3 +167,17 @@ Request:
 - Use stable IDs from backend/database, not frontend-generated IDs.
 - Return pagination metadata for list endpoints.
 - Return machine-readable error codes with human-readable messages.
+
+## LLM Provider
+
+Alert explanation uses Mistral Chat Completions:
+
+- Endpoint: `POST https://api.mistral.ai/v1/chat/completions`
+- Auth header: `Authorization: Bearer <MISTRAL_API_KEY>`
+- Default model: `mistral-small-latest`
+- Config variables:
+  - `MISTRAL_API_KEY`
+  - `MISTRAL_MODEL`
+  - `MISTRAL_CHAT_COMPLETIONS_URL`
+
+If the API key is missing or the Mistral request fails, the backend returns a deterministic rule-based fallback explanation.
