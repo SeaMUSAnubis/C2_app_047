@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: [self-hosted, cohort2-runner-01]
+    runs-on: self-hosted
     steps:
         uses: actions/checkout@v4
         run: echo "Running on cohort2-runner-01"
