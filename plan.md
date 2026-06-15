@@ -186,67 +186,121 @@ Chạy:
 
 ### 1. Tổng quan: code đã đáp ứng plan chưa?
 
-Chưa hoàn toàn. Code đã triển khai phần lõi của raw log collection: bảng `raw_user_logs`, endpoints `/api/raw-logs/*`, upsert theo `source_id`, filter cơ bản, schema Pydantic và test service/API. `ruff` pass và `pytest` hiện là `17 passed, 12 skipped`.
+Phần code hiện tại đã đáp ứng phần lớn mục tiêu trong `plan.md` cho backend raw log collection. Các thay đổi đang có trong repo tập trung vào:
 
-Tuy nhiên có vài điểm lệch quan trọng so với `plan.md`, đặc biệt là batch ingest chưa thật sự “trả lỗi theo từng record” khi input invalid, và `event_type` chưa bị giới hạn theo danh sách trong plan.
+- `src/models/schemas.py`: thêm validate `event_type`, validate timestamp ISO và cho batch nhận raw dict để bắt lỗi theo từng record.
+- `src/api/routes.py`: batch endpoint validate từng record thay vì để FastAPI fail toàn bộ request.
+- `src/services/database.py`: thêm CHECK constraint cho `event_type`, batch ingest dùng một connection và savepoint theo từng record.
+- `tests/test_api/test_routes.py` và `tests/test_services/test_database.py`: bổ sung test cho invalid event type, partial batch success/failure và batch DB behavior.
+
+Kết quả kiểm tra hiện tại:
+
+- `ruff check src tests`: pass.
+- `pytest -q`: `19 passed, 13 skipped`.
+
+Tuy nhiên vẫn chưa nên xem là hoàn tất để merge, vì còn một số rủi ro đáng sửa trước, đặc biệt ở migration DB hiện có và cách trả lỗi DB ra ngoài API.
 
 ### 2. Vấn đề nghiêm trọng cần sửa
 
-- Batch ingest không đáp ứng yêu cầu per-record errors cho invalid records.
-  - Trong plan: `Batch ingest trả lỗi theo từng record mà không fail toàn bộ batch`.
-  - Nhưng endpoint hiện nhận `RawLogBatchIngest` với `records: list[RawLogIngest]`, nên FastAPI/Pydantic validate toàn bộ request trước khi vào route.
-  - Nếu 1 record thiếu `source_id` hoặc `timestamp`, toàn request sẽ trả `422`, không có `{created_or_updated, failed, errors}` theo từng record.
+- Migration DB chưa thật sự an toàn với bảng đã tồn tại.
+  - `raw_user_logs` hiện thêm `CHECK (event_type IN (...))` trong câu `CREATE TABLE IF NOT EXISTS`.
+  - Nếu database đã từng được tạo bằng version cũ không có CHECK constraint, câu `CREATE TABLE IF NOT EXISTS` sẽ không cập nhật schema.
+  - Kết quả là môi trường cũ vẫn có thể lưu `event_type` sai, dù code mới đã validate ở API.
+  - Nên thêm migration/idempotent schema upgrade: kiểm tra `pg_constraint`, nếu chưa có constraint thì `ALTER TABLE raw_user_logs ADD CONSTRAINT ... CHECK (...)`.
 
-- `event_type` không được validate theo danh sách hỗ trợ.
-  - Plan yêu cầu các giá trị hỗ trợ: `logon`, `device`, `file`, `http`, `email`, `process`, `network`, `ldap`, `psychometric`, `custom`.
-  - Hiện code để `event_type: str` và DB là `TEXT` không có `CHECK`, nên typo như `lgoon` vẫn được lưu.
-  - Điều này sẽ làm hỏng dữ liệu raw phục vụ normalize/feature sau này.
-
-- Batch ingest mở connection riêng cho từng record.
-  - `batch_ingest_raw_logs()` gọi `ingest_raw_log()` trong loop, mỗi record mở một DB connection.
-  - Với giới hạn 1000 records/request, cách này tốn connection và chậm.
-  - Plan đặt batch endpoint để ingest nhiều record, nên implementation hiện tại chưa phù hợp về performance.
+- Batch service đang trả lỗi DB thô ra response.
+  - Trong `batch_ingest_raw_logs()`, khi insert/upsert fail, code append `{"index": idx, "error": str(exc)}`.
+  - `str(exc)` có thể lộ chi tiết nội bộ của PostgreSQL, tên constraint, cấu trúc bảng hoặc một phần dữ liệu lỗi.
+  - Với endpoint ingest raw data, đây là rủi ro bảo mật và làm API contract khó ổn định.
+  - Nên log exception chi tiết ở server, nhưng response chỉ trả lỗi đã sanitize như `database_error` hoặc `failed_to_ingest_record`.
 
 ### 3. Vấn đề nhỏ / cải thiện nên làm
 
-- Timestamp đang là `str`, chưa validate ISO 8601.
-  - Plan dùng timestamp dạng ISO.
-  - Hiện chuỗi bất kỳ vẫn qua schema và sẽ sort theo text trong DB.
-  - Nên dùng `datetime` ở schema hoặc validator ISO string.
+- Savepoint trong batch ingest chưa được release sau record thành công.
+  - Code tạo `SAVEPOINT sp_raw_batch` cho từng record và rollback khi lỗi, nhưng record thành công không gọi `RELEASE SAVEPOINT`.
+  - PostgreSQL sẽ xử lý khi transaction kết thúc, nhưng với batch lớn thì nên release để giảm tài nguyên transaction.
 
-- Không có giới hạn kích thước `raw_payload` / `ingest_metadata`.
-  - Raw payload arbitrary là đúng hướng, nhưng không giới hạn size có thể gây memory/DB bloat hoặc DoS.
-  - Nên đặt giới hạn request body ở API/server hoặc validate JSON serialized size.
+- Batch route validate record nhưng vẫn append raw dict.
+  - Trong `/raw-logs/batch`, code gọi `RawLogIngest.model_validate(record)` nhưng sau đó append lại `record`.
+  - Nên dùng `validated = RawLogIngest.model_validate(record)` rồi `valid_records.append(validated.model_dump())`.
+  - Điều này đảm bảo dữ liệu truyền xuống service là dữ liệu đã normalize/validated bởi schema.
 
-- Test API batch đang đặt tên chưa đúng hành vi.
-  - `test_batch_ingest_saves_valid_and_reports_invalid` chỉ gửi 2 record hợp lệ và assert `failed == 0`.
-  - Tên test nói có invalid nhưng thực tế không test invalid API case.
+- Filter `collector_type` chưa có index riêng.
+  - Query list raw logs có filter `collector_type`, nhưng DB mới chỉ có index theo `timestamp`, `user_id`, `device_id`, `event_type`.
+  - Nếu dữ liệu raw log tăng lớn, filter theo collector sẽ chậm.
+  - Nên thêm `idx_raw_user_logs_collector_type`.
 
-- Test integration bị skip nhiều.
-  - `12 skipped` do cần PostgreSQL thật.
-  - Chấp nhận được ở local hiện tại, nhưng trước khi merge nên chạy với `TEST_DATABASE_URL`.
+- Timestamp validator vẫn hơi lỏng.
+  - Validator hiện dùng `datetime.fromisoformat(v.replace("Z", "+00:00"))`.
+  - Cách này chấp nhận timestamp không timezone.
+  - Nếu pipeline sau cần dữ liệu thời gian nhất quán, nên yêu cầu timezone rõ ràng hoặc normalize tất cả về UTC trước khi lưu.
+
+- Test PostgreSQL thật vẫn bị skip nếu không có `TEST_DATABASE_URL`.
+  - Local hiện tại pass unit/API tests, nhưng các test phụ thuộc PostgreSQL cần chạy trên môi trường có database thật trước khi merge.
 
 ### 4. File hoặc đoạn code liên quan
 
-- `src/models/schemas.py`: `RawLogIngest.event_type` là `str`; `RawLogBatchIngest.records` là `list[RawLogIngest]`.
-- `src/api/routes.py`: batch endpoint validate request trước route nên không thể bắt lỗi từng record invalid.
-- `src/services/database.py`: bảng `raw_user_logs` không có `CHECK` cho `event_type`.
-- `src/services/database.py`: batch ingest gọi `ingest_raw_log()` từng record, mở nhiều connection.
-- `tests/test_api/test_routes.py`: test batch không có invalid record dù tên test nói có.
-- `tests/test_services/test_database.py`: per-record error chỉ test ở service bằng monkeypatch, chưa test API validation failure.
+- `src/models/schemas.py`
+  - `RawLogEventType`
+  - `RawLogIngest.validate_iso_timestamp`
+  - `RawLogBatchIngest.records`
+
+- `src/api/routes.py`
+  - `batch_ingest_raw_logs()`
+  - Logic validate từng record và build `valid_records`.
+
+- `src/services/database.py`
+  - `init_database()` tạo bảng `raw_user_logs`.
+  - `batch_ingest_raw_logs()` dùng savepoint và trả per-record errors.
+  - Indexes cho `raw_user_logs`.
+
+- `tests/test_api/test_routes.py`
+  - Test batch partial success/failure.
+  - Test invalid `event_type`.
+
+- `tests/test_services/test_database.py`
+  - Test DB batch partial failure.
+  - Test filter/list raw logs.
 
 ### 5. Đề xuất hướng sửa cụ thể
 
-- Sửa batch API để nhận raw dict list thay vì `list[RawLogIngest]`, ví dụ `records: list[dict[str, Any]]`.
-- Trong route/service, loop từng item và gọi `RawLogIngest.model_validate(record)` để catch `ValidationError` theo index, sau đó trả `{created_or_updated, failed, errors}`.
-- Thêm `RawLogEventType = Literal[...]` hoặc Enum cho `event_type`.
-- Thêm DB `CHECK (event_type IN (...))` để bảo vệ cả API lẫn DB.
-- Tối ưu batch DB bằng một connection cho toàn batch.
-- Vẫn có thể xử lý per-record lỗi bằng savepoint hoặc validate trước rồi upsert từng record trong cùng connection.
-- Dùng `datetime` hoặc validator ISO cho `timestamp`; serialize ra ISO khi lưu.
-- Thêm test API batch có 1 valid + 1 invalid record, kỳ vọng `200`, `created_or_updated == 1`, `failed == 1`, `errors[0].index == 1`.
-- Thêm test event type invalid bị reject ở API và/hoặc DB-level test cho `CHECK`.
+- Thêm schema migration idempotent cho constraint:
+  - Kiểm tra constraint bằng `pg_constraint`.
+  - Nếu chưa có thì chạy `ALTER TABLE raw_user_logs ADD CONSTRAINT raw_user_logs_event_type_check CHECK (...)`.
+  - Nếu dữ liệu cũ có `event_type` invalid, cần quyết định migrate thành `custom` hoặc báo lỗi rõ trong migration.
+
+- Sanitize lỗi batch DB:
+  - Trong `batch_ingest_raw_logs()`, không trả `str(exc)` trực tiếp.
+  - Log chi tiết exception ở server.
+  - Response chỉ trả error code/message ổn định, ví dụ `{"index": idx, "error": "failed_to_ingest_record"}`.
+
+- Release savepoint sau mỗi record thành công:
+  - Sau khi insert/upsert thành công, gọi `RELEASE SAVEPOINT sp_raw_batch`.
+  - Giữ rollback savepoint cho record lỗi.
+
+- Dùng output đã validate trong route batch:
+  - `validated = RawLogIngest.model_validate(record)`.
+  - `valid_records.append(validated.model_dump())`.
+
+- Bổ sung index:
+  - `CREATE INDEX IF NOT EXISTS idx_raw_user_logs_collector_type ON raw_user_logs(collector_type)`.
+
+- Siết timestamp nếu cần dữ liệu phân tích chính xác:
+  - Yêu cầu timezone trong timestamp.
+  - Hoặc parse thành `datetime`, normalize về UTC, rồi lưu ISO string chuẩn.
+
+- Chạy lại kiểm tra sau khi sửa:
+  - `ruff check src tests`.
+  - `pytest -q`.
+  - Chạy thêm test với PostgreSQL thật bằng `TEST_DATABASE_URL` nếu có database local/CI.
 
 ### 6. Kết luận: có nên merge/commit chưa?
 
-Chưa nên merge. Code đã đi đúng hướng và pass test hiện tại, nhưng còn lệch plan ở batch per-record error và kiểm soát `event_type`. Hai điểm này ảnh hưởng trực tiếp chất lượng raw data và contract API cho bước sau, nên cần sửa trước khi commit/merge phần raw log collection.
+Chưa nên merge/commit phần raw log collection như trạng thái cuối cùng. Code đã tiến gần plan hơn bản trước và các lỗi lớn ban đầu về batch per-record validation, `event_type` validation và batch connection đã được xử lý ở mức code mới.
+
+Tuy nhiên trước khi merge cần sửa ít nhất 2 điểm:
+
+- Thêm migration/idempotent update cho DB đã tồn tại để đảm bảo `CHECK event_type` thật sự có hiệu lực.
+- Không trả `str(exc)` từ database ra API response.
+
+Sau khi sửa hai điểm trên và chạy lại lint/test, phần này mới đủ ổn để commit/merge.
