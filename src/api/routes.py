@@ -228,8 +228,8 @@ async def batch_ingest_raw_logs(
     errors: list[dict[str, Any]] = []
     for idx, record in enumerate(payload.records):
         try:
-            RawLogIngest.model_validate(record)
-            valid_records.append(record)
+            validated = RawLogIngest.model_validate(record)
+            valid_records.append(validated.model_dump())
         except ValidationError as exc:
             failed += 1
             errors.append({"index": idx, "error": exc.errors()[0]["msg"]})
