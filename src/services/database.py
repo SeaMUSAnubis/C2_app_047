@@ -148,14 +148,29 @@ def initialize_database() -> None:
             )
             """
         )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_timestamp ON raw_user_logs(timestamp)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_raw_user_logs_timestamp ON raw_user_logs(timestamp)"
+        )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_user ON raw_user_logs(user_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_device ON raw_user_logs(device_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_event_type ON raw_user_logs(event_type)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_collector_type ON raw_user_logs(collector_type)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_raw_user_logs_device ON raw_user_logs(device_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_raw_user_logs_event_type ON raw_user_logs(event_type)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_raw_user_logs_collector_type ON raw_user_logs(collector_type)"
+        )
         _ensure_raw_user_logs_event_type_check(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_devices_assigned_user ON devices(assigned_user_id)"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_user_status ON alerts(user_id, status)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_alerts_device_status ON alerts(device_id, status)"
+        )
         _seed_accounts(conn)
         _seed_domain_data(conn)
 
@@ -166,7 +181,9 @@ def get_connection() -> Iterable[Any]:
         import psycopg
         from psycopg.rows import dict_row
     except ImportError as exc:
-        raise RuntimeError("PostgreSQL driver missing. Install dependencies with `pip install -r requirements.txt`.") from exc
+        raise RuntimeError(
+            "PostgreSQL driver missing. Install dependencies with `pip install -r requirements.txt`."
+        ) from exc
 
     conn = psycopg.connect(settings.database_url, row_factory=dict_row)
     try:
@@ -181,7 +198,9 @@ def get_connection() -> Iterable[Any]:
 
 def get_account_by_email(email: str) -> dict[str, Any] | None:
     with get_connection() as conn:
-        row = conn.execute("SELECT * FROM app_accounts WHERE lower(email) = lower(%s)", (email,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM app_accounts WHERE lower(email) = lower(%s)", (email,)
+        ).fetchone()
         return _row_to_dict(row)
 
 
@@ -193,7 +212,9 @@ def get_account_by_id(account_id: int) -> dict[str, Any] | None:
 
 def list_users(filters: dict[str, Any]) -> list[dict[str, Any]]:
     where, params = _user_filters(filters)
-    return _fetch_all("SELECT * FROM users", where, params, "risk_score DESC, username ASC", filters)
+    return _fetch_all(
+        "SELECT * FROM users", where, params, "risk_score DESC, username ASC", filters
+    )
 
 
 def count_users(filters: dict[str, Any]) -> int:
@@ -203,7 +224,9 @@ def count_users(filters: dict[str, Any]) -> int:
 
 def get_user(user_id: str) -> dict[str, Any] | None:
     with get_connection() as conn:
-        return _row_to_dict(conn.execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone())
+        return _row_to_dict(
+            conn.execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone()
+        )
 
 
 def create_user(payload: dict[str, Any]) -> dict[str, Any]:
@@ -232,7 +255,12 @@ def create_user(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def update_user(user_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-    return _update_by_id("users", user_id, payload, allowed={"email", "department", "job_role", "status", "risk_score"})
+    return _update_by_id(
+        "users",
+        user_id,
+        payload,
+        allowed={"email", "department", "job_role", "status", "risk_score"},
+    )
 
 
 def list_devices(filters: dict[str, Any]) -> list[dict[str, Any]]:
@@ -299,7 +327,15 @@ def update_device(device_id: str, payload: dict[str, Any]) -> dict[str, Any] | N
         "devices",
         device_id,
         payload,
-        allowed={"hostname", "os", "ip_address", "assigned_user_id", "status", "risk_score", "last_seen"},
+        allowed={
+            "hostname",
+            "os",
+            "ip_address",
+            "assigned_user_id",
+            "status",
+            "risk_score",
+            "last_seen",
+        },
     )
 
 
@@ -402,7 +438,9 @@ def batch_ingest_raw_logs(records: list[dict[str, Any]]) -> dict[str, Any]:
             conn.execute("SAVEPOINT sp_raw_batch")
             try:
                 raw_payload_json = json.dumps(record.get("raw_payload") or {}, sort_keys=True)
-                ingest_metadata_json = json.dumps(record.get("ingest_metadata") or {}, sort_keys=True)
+                ingest_metadata_json = json.dumps(
+                    record.get("ingest_metadata") or {}, sort_keys=True
+                )
                 conn.execute(
                     """
                     INSERT INTO raw_user_logs (
@@ -450,7 +488,9 @@ def get_raw_log(log_id: int) -> dict[str, Any] | None:
 
 def list_raw_logs(filters: dict[str, Any]) -> list[dict[str, Any]]:
     where, params = _raw_log_filters(filters)
-    rows = _fetch_all("SELECT * FROM raw_user_logs", where, params, "timestamp DESC, id DESC", filters)
+    rows = _fetch_all(
+        "SELECT * FROM raw_user_logs", where, params, "timestamp DESC, id DESC", filters
+    )
     return [_decode_raw_log_fields(row) for row in rows]
 
 
@@ -471,6 +511,134 @@ def _raw_log_filters(filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
     )
 
 
+# ---------------------------------------------------------------------------
+# Frontend-compatible query helpers
+# ---------------------------------------------------------------------------
+
+
+def get_dashboard_summary() -> dict[str, Any]:
+    with get_connection() as conn:
+        total_users = int(conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"])
+        total_devices = int(conn.execute("SELECT COUNT(*) AS c FROM devices").fetchone()["c"])
+        total_logs = int(conn.execute("SELECT COUNT(*) AS c FROM event_logs").fetchone()["c"])
+
+        open_alerts = int(
+            conn.execute(
+                "SELECT COUNT(*) AS c FROM alerts WHERE status NOT IN ('resolved', 'false_positive')"
+            ).fetchone()["c"]
+        )
+        high_critical_alerts = int(
+            conn.execute(
+                "SELECT COUNT(*) AS c FROM alerts "
+                "WHERE status NOT IN ('resolved', 'false_positive') AND severity IN ('high', 'critical')"
+            ).fetchone()["c"]
+        )
+        avg_row = conn.execute("SELECT COALESCE(AVG(risk_score), 0) AS avg FROM users").fetchone()
+        average_risk_score = round(float(avg_row["avg"]), 1)
+
+        model_row = conn.execute(
+            "SELECT model_version FROM model_artifacts ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        current_model_version = model_row["model_version"] if model_row else None
+
+        last_import_row = conn.execute(
+            "SELECT MAX(ts) AS ts FROM ("
+            "  SELECT MAX(timestamp) AS ts FROM event_logs"
+            "  UNION ALL"
+            "  SELECT MAX(timestamp) AS ts FROM raw_user_logs"
+            ") sub"
+        ).fetchone()
+        last_import_time = (
+            last_import_row["ts"] if last_import_row and last_import_row["ts"] else None
+        )
+
+    return {
+        "totalUsers": total_users,
+        "totalDevices": total_devices,
+        "totalLogs": total_logs,
+        "openAlerts": open_alerts,
+        "highCriticalAlerts": high_critical_alerts,
+        "averageRiskScore": average_risk_score,
+        "currentModelVersion": current_model_version,
+        "lastImportTime": last_import_time,
+    }
+
+
+def list_frontend_users(limit: int = 200) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            u.id,
+            u.username AS account,
+            u.full_name AS name,
+            u.department,
+            u.job_role AS role,
+            u.status,
+            u.risk_score AS "riskScore",
+            COALESCE(dev.assigned_devices, 0) AS "assignedDevices",
+            COALESCE(alo.open_alerts, 0) AS "openAlerts",
+            ls.last_seen AS "lastSeen"
+        FROM users u
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS assigned_devices FROM devices d WHERE d.assigned_user_id = u.id
+        ) dev ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS open_alerts FROM alerts a
+            WHERE a.user_id = u.id AND a.status NOT IN ('resolved', 'false_positive')
+        ) alo ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT MAX(d2.last_seen) AS last_seen FROM devices d2 WHERE d2.assigned_user_id = u.id
+        ) ls ON TRUE
+        ORDER BY u.risk_score DESC, u.username ASC
+        LIMIT %s
+    """
+    with get_connection() as conn:
+        return [_row_to_dict(row) or {} for row in conn.execute(sql, (limit,)).fetchall()]
+
+
+def list_frontend_devices(limit: int = 200) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            d.id,
+            d.hostname,
+            u.username AS "assignedUser",
+            u.department,
+            CASE WHEN d.status = 'online' THEN 'active' ELSE 'inactive' END AS status,
+            d.risk_score AS "riskScore",
+            COALESCE(alo.open_alerts, 0) AS "openAlerts",
+            d.last_seen AS "lastSeen"
+        FROM devices d
+        LEFT JOIN users u ON u.id = d.assigned_user_id
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS open_alerts FROM alerts a
+            WHERE a.device_id = d.id AND a.status NOT IN ('resolved', 'false_positive')
+        ) alo ON TRUE
+        ORDER BY d.risk_score DESC, d.hostname ASC
+        LIMIT %s
+    """
+    with get_connection() as conn:
+        return [_row_to_dict(row) or {} for row in conn.execute(sql, (limit,)).fetchall()]
+
+
+def list_frontend_logs(limit: int = 100) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            id::TEXT AS id,
+            timestamp,
+            event_type AS "eventType",
+            user_id AS "userId",
+            device_id AS "deviceId",
+            COALESCE(action, 'UNKNOWN') AS action,
+            source_file AS "sourceFile",
+            source_id AS "sourceId",
+            COALESCE(resource, '') AS "rawDetail"
+        FROM event_logs
+        ORDER BY timestamp DESC, id DESC
+        LIMIT %s
+    """
+    with get_connection() as conn:
+        return [_row_to_dict(row) or {} for row in conn.execute(sql, (limit,)).fetchall()]
+
+
 def _decode_raw_log_fields(row: dict[str, Any]) -> dict[str, Any]:
     for key in ("raw_payload_json", "ingest_metadata_json"):
         if key in row:
@@ -480,8 +648,16 @@ def _decode_raw_log_fields(row: dict[str, Any]) -> dict[str, Any]:
 
 
 _RAW_LOG_EVENT_TYPES = (
-    "logon", "device", "file", "http", "email",
-    "process", "network", "ldap", "psychometric", "custom",
+    "logon",
+    "device",
+    "file",
+    "http",
+    "email",
+    "process",
+    "network",
+    "ldap",
+    "psychometric",
+    "custom",
 )
 
 
@@ -535,9 +711,36 @@ def _seed_accounts(conn: Any) -> None:
 def _seed_domain_data(conn: Any) -> None:
     now = utc_now()
     users = [
-        ("ACM0001", "acm0001", "Alice M. Carter", "alice.carter@example.com", "Finance", "Accountant", "active", 18),
-        ("BTR0002", "btr0002", "Bao Tran", "bao.tran@example.com", "Engineering", "Developer", "active", 42),
-        ("CNL0003", "cnl0003", "Chi Nguyen", "chi.nguyen@example.com", "HR", "HR Specialist", "active", 7),
+        (
+            "ACM0001",
+            "acm0001",
+            "Alice M. Carter",
+            "alice.carter@example.com",
+            "Finance",
+            "Accountant",
+            "active",
+            18,
+        ),
+        (
+            "BTR0002",
+            "btr0002",
+            "Bao Tran",
+            "bao.tran@example.com",
+            "Engineering",
+            "Developer",
+            "active",
+            42,
+        ),
+        (
+            "CNL0003",
+            "cnl0003",
+            "Chi Nguyen",
+            "chi.nguyen@example.com",
+            "HR",
+            "HR Specialist",
+            "active",
+            7,
+        ),
     ]
     for row in users:
         conn.execute(
@@ -551,9 +754,36 @@ def _seed_domain_data(conn: Any) -> None:
         )
 
     devices = [
-        ("PC-1001", "FIN-WS-1001", "Windows 11", "10.10.1.21", "ACM0001", "online", 12, "2026-06-13T08:12:00Z"),
-        ("PC-2002", "ENG-LT-2002", "Ubuntu 24.04", "10.10.2.44", "BTR0002", "online", 39, "2026-06-13T08:09:00Z"),
-        ("PC-3003", "HR-WS-3003", "Windows 10", "10.10.3.18", "CNL0003", "offline", 4, "2026-06-12T17:42:00Z"),
+        (
+            "PC-1001",
+            "FIN-WS-1001",
+            "Windows 11",
+            "10.10.1.21",
+            "ACM0001",
+            "online",
+            12,
+            "2026-06-13T08:12:00Z",
+        ),
+        (
+            "PC-2002",
+            "ENG-LT-2002",
+            "Ubuntu 24.04",
+            "10.10.2.44",
+            "BTR0002",
+            "online",
+            39,
+            "2026-06-13T08:09:00Z",
+        ),
+        (
+            "PC-3003",
+            "HR-WS-3003",
+            "Windows 10",
+            "10.10.3.18",
+            "CNL0003",
+            "offline",
+            4,
+            "2026-06-12T17:42:00Z",
+        ),
     ]
     for row in devices:
         conn.execute(
@@ -589,7 +819,9 @@ def _user_filters(filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
     )
     search = filters.get("search")
     if search:
-        where.append("(lower(username) LIKE %s OR lower(full_name) LIKE %s OR lower(email) LIKE %s)")
+        where.append(
+            "(lower(username) LIKE %s OR lower(full_name) LIKE %s OR lower(email) LIKE %s)"
+        )
         term = f"%{search.lower()}%"
         params.extend([term, term, term])
     return where, params
@@ -641,7 +873,9 @@ def _count(table: str, where: list[str], params: list[Any]) -> int:
         return int(conn.execute(sql, params).fetchone()["count"])
 
 
-def _update_by_id(table: str, row_id: str, payload: dict[str, Any], *, allowed: set[str]) -> dict[str, Any] | None:
+def _update_by_id(
+    table: str, row_id: str, payload: dict[str, Any], *, allowed: set[str]
+) -> dict[str, Any] | None:
     updates = {key: value for key, value in payload.items() if key in allowed}
     if not updates:
         return get_user(row_id) if table == "users" else get_device(row_id)

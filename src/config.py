@@ -20,6 +20,10 @@ class Settings(BaseSettings):
         default="https://api.mistral.ai/v1/chat/completions",
         alias="MISTRAL_CHAT_COMPLETIONS_URL",
     )
+    cors_origins: str = Field(
+        default="http://localhost:5173,http://127.0.0.1:5173",
+        alias="CORS_ORIGINS",
+    )
 
 
 settings = Settings()
