@@ -26,9 +26,15 @@ Repo này follow cấu trúc của `AI20K-Build-Cohort-2/starter-code-template`:
 ├── docs/
 │   ├── guide/
 │   ├── references/
-│   ├── architecture_diagram.md
-│   ├── PRD.md
-│   └── DATA_CONTRACT.md
+│   ├── architecture/
+│   ├── assets/
+│   ├── contracts/
+│   ├── management/
+│   ├── planning/
+│   ├── reports/
+│   ├── standards/
+│   ├── guide/
+│   └── references/
 ├── eval/
 │   └── results/
 ├── presentation/
@@ -41,9 +47,7 @@ Repo này follow cấu trúc của `AI20K-Build-Cohort-2/starter-code-template`:
 ├── Makefile
 ├── requirements.txt
 ├── ruff.toml
-├── README.md
-├── JOURNAL.md
-└── WORKLOG.md
+└── README.md
 ```
 
 ## Quy tắc chính
@@ -68,7 +72,7 @@ Repo này follow cấu trúc của `AI20K-Build-Cohort-2/starter-code-template`:
 | `ml/ueba_ml/...` | `src/services/ueba_ml/...` |
 | `reports/...` | `eval/results/...` |
 | `infra/...` | `Dockerfile`, `docker-compose.yml`, `.github/workflows/` |
-| `data/schemas/...` | `docs/DATA_CONTRACT.md` |
+| `data/schemas/...` | `docs/contracts/DATA_CONTRACT.md` |
 | `data/raw`, `data/sample` | local-only `data/`, ignored by git |
 | `artifacts/...` | local-only `artifacts/`, ignored by git |
 
@@ -79,7 +83,7 @@ Repo này follow cấu trúc của `AI20K-Build-Cohort-2/starter-code-template`:
 | API/backend | `src/api/`, `src/models/`, `src/main.py` | FastAPI endpoints, schemas, app wiring |
 | Data/ML | `src/services/ueba_ml/`, `eval/results/` | Feature pipeline, iForest training, metrics/report |
 | Agent/LLM | `src/agents/`, `src/services/llm.py` | Alert explanation workflow |
-| Product/docs | `docs/`, `README.md`, `JOURNAL.md`, `WORKLOG.md` | PRD, architecture, contracts, worklog |
+| Product/docs | `docs/`, `README.md`, `docs/management/JOURNAL.md`, `docs/management/WORKLOG.md` | PRD, architecture, contracts, worklog |
 | QA/DevOps | `tests/`, `.github/workflows/`, `Dockerfile`, `Makefile` | CI, tests, container/deploy commands |
 
 ## Commit hygiene
