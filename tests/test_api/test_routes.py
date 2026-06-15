@@ -8,6 +8,54 @@ requires_postgres = pytest.mark.skipif(
 )
 
 
+async def _mock_admin_token(client) -> str:
+    """Get a token using mocked auth (no DB required)."""
+    response = await client.post(
+        "/api/auth/login", json={"email": "admin@demo.com", "password": "admin123"}
+    )
+    assert response.status_code == 200
+    return response.json()["accessToken"]
+
+
+def _patch_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch auth-related DB calls so login works without PostgreSQL."""
+    from src.services import auth, database
+
+    monkeypatch.setattr(
+        database,
+        "get_account_by_email",
+        lambda email: {
+            "id": 1,
+            "email": "admin@demo.com",
+            "full_name": "Demo Admin",
+            "role": "admin",
+            "password_hash": auth.hash_password("admin123"),
+            "is_active": True,
+        }
+        if email == "admin@demo.com"
+        else None,
+    )
+    monkeypatch.setattr(
+        database,
+        "get_account_by_id",
+        lambda aid: {
+            "id": aid,
+            "email": "admin@demo.com",
+            "full_name": "Demo Admin",
+            "role": "admin",
+            "password_hash": auth.hash_password("admin123"),
+            "is_active": True,
+        }
+        if aid == 1
+        else None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Non-PostgreSQL tests: monkeypatch database helpers to verify serialization
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
 async def test_health_endpoint() -> None:
     async with get_test_client() as client:
@@ -15,6 +63,165 @@ async def test_health_endpoint() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_dashboard_summary_serializes_camel_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services import database
+
+    _patch_auth(monkeypatch)
+
+    fake_summary = {
+        "totalUsers": 128,
+        "totalDevices": 96,
+        "totalLogs": 54210,
+        "openAlerts": 14,
+        "highCriticalAlerts": 5,
+        "averageRiskScore": 42.0,
+        "currentModelVersion": "iForest-v0.1-demo",
+        "lastImportTime": "2026-06-13T09:30:00+07:00",
+    }
+    monkeypatch.setattr(database, "get_dashboard_summary", lambda: fake_summary)
+
+    async with get_test_client() as client:
+        token = await _mock_admin_token(client)
+        response = await client.get(
+            "/api/dashboard/summary", headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["totalUsers"] == 128
+    assert data["totalDevices"] == 96
+    assert data["totalLogs"] == 54210
+    assert data["openAlerts"] == 14
+    assert data["highCriticalAlerts"] == 5
+    assert data["averageRiskScore"] == 42.0
+    assert data["currentModelVersion"] == "iForest-v0.1-demo"
+    assert data["lastImportTime"] == "2026-06-13T09:30:00+07:00"
+
+
+@pytest.mark.asyncio
+async def test_users_serializes_camel_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services import database
+
+    _patch_auth(monkeypatch)
+
+    fake_users = [
+        {
+            "id": "ACM0001",
+            "account": "acm0001",
+            "name": "Alice M. Carter",
+            "department": "Finance",
+            "role": "Accountant",
+            "status": "active",
+            "riskScore": 18,
+            "assignedDevices": 1,
+            "openAlerts": 0,
+            "lastSeen": "2026-06-13T08:12:00Z",
+        },
+    ]
+    monkeypatch.setattr(database, "list_frontend_users", lambda limit=200: fake_users)
+
+    async with get_test_client() as client:
+        token = await _mock_admin_token(client)
+        response = await client.get("/api/users", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    item = data[0]
+    assert item["id"] == "ACM0001"
+    assert item["account"] == "acm0001"
+    assert item["name"] == "Alice M. Carter"
+    assert item["department"] == "Finance"
+    assert item["role"] == "Accountant"
+    assert item["status"] == "active"
+    assert item["riskScore"] == 18
+    assert item["assignedDevices"] == 1
+    assert item["openAlerts"] == 0
+    assert item["lastSeen"] == "2026-06-13T08:12:00Z"
+
+
+@pytest.mark.asyncio
+async def test_devices_serializes_camel_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services import database
+
+    _patch_auth(monkeypatch)
+
+    fake_devices = [
+        {
+            "id": "PC-1001",
+            "hostname": "FIN-WS-1001",
+            "assignedUser": "acm0001",
+            "department": "Finance",
+            "status": "active",
+            "riskScore": 12,
+            "openAlerts": 0,
+            "lastSeen": "2026-06-13T08:12:00Z",
+        },
+    ]
+    monkeypatch.setattr(database, "list_frontend_devices", lambda limit=200: fake_devices)
+
+    async with get_test_client() as client:
+        token = await _mock_admin_token(client)
+        response = await client.get("/api/devices", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    item = data[0]
+    assert item["id"] == "PC-1001"
+    assert item["hostname"] == "FIN-WS-1001"
+    assert item["assignedUser"] == "acm0001"
+    assert item["department"] == "Finance"
+    assert item["status"] == "active"
+    assert item["riskScore"] == 12
+    assert item["openAlerts"] == 0
+    assert item["lastSeen"] == "2026-06-13T08:12:00Z"
+
+
+@pytest.mark.asyncio
+async def test_logs_serializes_camel_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services import database
+
+    _patch_auth(monkeypatch)
+
+    fake_logs = [
+        {
+            "id": "1",
+            "timestamp": "2026-06-13T16:10:00+07:00",
+            "eventType": "logon",
+            "userId": "ACM0001",
+            "deviceId": "PC-1001",
+            "action": "LOGIN_SUCCESS",
+            "sourceFile": "logon.csv",
+            "sourceId": "cert-r42:logon:123",
+            "rawDetail": "Successful logon from FIN-WS-1001",
+        },
+    ]
+    monkeypatch.setattr(database, "list_frontend_logs", lambda limit=100: fake_logs)
+
+    async with get_test_client() as client:
+        token = await _mock_admin_token(client)
+        response = await client.get("/api/logs", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    item = data[0]
+    assert item["id"] == "1"
+    assert item["timestamp"] == "2026-06-13T16:10:00+07:00"
+    assert item["eventType"] == "logon"
+    assert item["userId"] == "ACM0001"
+    assert item["deviceId"] == "PC-1001"
+    assert item["action"] == "LOGIN_SUCCESS"
+    assert item["sourceFile"] == "logon.csv"
+    assert item["sourceId"] == "cert-r42:logon:123"
+    assert item["rawDetail"] == "Successful logon from FIN-WS-1001"
 
 
 @pytest.mark.asyncio
@@ -105,15 +312,15 @@ async def test_users_returns_frontend_compatible_array() -> None:
     assert isinstance(data, list)
     assert len(data) >= 3
     item = data[0]
-    assert "id" in item
-    assert "account" in item
-    assert "name" in item
-    assert "department" in item
-    assert "role" in item
-    assert "status" in item
-    assert "riskScore" in item
-    assert "assignedDevices" in item
-    assert "openAlerts" in item
+    assert item["id"] == "ACM0001"
+    assert item["account"] == "acm0001"
+    assert item["name"] == "Alice M. Carter"
+    assert item["department"] == "Finance"
+    assert item["role"] == "Accountant"
+    assert item["status"] == "active"
+    assert item["riskScore"] == 18
+    assert item["assignedDevices"] == 1
+    assert item["openAlerts"] == 0
 
 
 @pytest.mark.asyncio
@@ -129,13 +336,13 @@ async def test_devices_returns_frontend_compatible_array() -> None:
     assert isinstance(data, list)
     assert len(data) >= 3
     item = data[0]
-    assert "id" in item
-    assert "hostname" in item
-    assert "assignedUser" in item
-    assert "status" in item
-    assert item["status"] in ("active", "inactive")
-    assert "riskScore" in item
-    assert "openAlerts" in item
+    assert item["id"] == "PC-1001"
+    assert item["hostname"] == "FIN-WS-1001"
+    assert item["assignedUser"] == "acm0001"
+    assert item["department"] == "Finance"
+    assert item["status"] == "active"
+    assert item["riskScore"] == 12
+    assert item["openAlerts"] == 0
 
 
 @pytest.mark.asyncio
@@ -163,16 +370,13 @@ async def test_dashboard_summary_returns_frontend_compatible_response() -> None:
 
     assert response.status_code == 200
     data = response.json()
-    assert "totalUsers" in data
-    assert "totalDevices" in data
-    assert "totalLogs" in data
-    assert "openAlerts" in data
-    assert "highCriticalAlerts" in data
-    assert "averageRiskScore" in data
-    assert isinstance(data["totalUsers"], int)
-    assert isinstance(data["totalDevices"], int)
-    assert data["totalUsers"] >= 3
-    assert data["totalDevices"] >= 3
+    assert data["totalUsers"] == 3
+    assert data["totalDevices"] == 3
+    assert data["totalLogs"] == 0
+    assert data["openAlerts"] == 0
+    assert data["highCriticalAlerts"] == 0
+    assert isinstance(data["averageRiskScore"], int | float)
+    assert data["averageRiskScore"] > 0
 
 
 @pytest.mark.asyncio
