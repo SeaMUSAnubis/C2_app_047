@@ -1,5 +1,9 @@
 from contextlib import contextmanager
 
+import pytest
+from pydantic import ValidationError
+
+from src.models.schemas import RawLogBatchIngest, RawLogIngest
 from src.services import database
 
 
@@ -108,3 +112,157 @@ def test_postgresql_filters_use_percent_s_placeholders() -> None:
     assert user_params == ["Finance", "active", "%alice%", "%alice%", "%alice%"]
     assert event_where == ["user_id = %s", "event_type = %s"]
     assert event_params == ["ACM0001", "logon"]
+
+
+class FakeRawLogCursor:
+    def __init__(self, row: dict | None = None, rows: list[dict] | None = None) -> None:
+        self._row = row
+        self._rows = rows or []
+
+    def fetchone(self) -> dict | None:
+        return self._row
+
+    def fetchall(self) -> list[dict]:
+        return self._rows
+
+
+class FakeRawLogConnection:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple | list | None]] = []
+
+    def execute(self, sql: str, params: tuple | list | None = None) -> FakeRawLogCursor:
+        self.calls.append((sql, params))
+        if "RETURNING *" in sql:
+            return FakeRawLogCursor(
+                {
+                    "id": 1,
+                    "source_id": "agent:PC-1001:logon:2026-06-15T08:15:00Z",
+                    "collector_type": "endpoint_agent",
+                    "event_type": "logon",
+                    "timestamp": "2026-06-15T08:15:00Z",
+                    "user_id": "ACM0001",
+                    "device_id": "PC-1001",
+                    "raw_payload_json": '{"action": "Logon", "username": "acm0001"}',
+                    "ingest_metadata_json": '{"agent_version": "0.1.0"}',
+                    "normalized_event_id": None,
+                    "created_at": "2026-06-15T00:00:00Z",
+                }
+            )
+        return FakeRawLogCursor({"count": 0})
+
+
+def test_raw_log_schema_validates_required_fields() -> None:
+    with pytest.raises(ValidationError):
+        RawLogIngest.model_validate({})
+
+
+def test_raw_log_schema_keeps_arbitrary_raw_payload() -> None:
+    log = RawLogIngest(
+        source_id="test:1",
+        collector_type="endpoint_agent",
+        event_type="logon",
+        timestamp="2026-06-15T08:15:00Z",
+        raw_payload={"action": "Logon", "custom_key": "custom_value", "nested": {"a": 1}},
+    )
+    assert log.raw_payload["custom_key"] == "custom_value"
+    assert log.raw_payload["nested"]["a"] == 1
+
+
+def test_raw_log_batch_schema_max_1000_records() -> None:
+    records = [
+        RawLogIngest(
+            source_id=f"test:{i}",
+            collector_type="endpoint_agent",
+            event_type="logon",
+            timestamp="2026-06-15T08:15:00Z",
+        )
+        for i in range(1001)
+    ]
+    with pytest.raises(ValidationError):
+        RawLogBatchIngest(records=records)
+
+
+def test_ingest_raw_log_uses_postgresql_upsert(monkeypatch) -> None:
+    fake_conn = FakeRawLogConnection()
+
+    @contextmanager
+    def fake_get_connection():
+        yield fake_conn
+
+    monkeypatch.setattr(database, "get_connection", fake_get_connection)
+
+    result = database.ingest_raw_log(
+        {
+            "source_id": "agent:PC-1001:logon:2026-06-15T08:15:00Z",
+            "collector_type": "endpoint_agent",
+            "event_type": "logon",
+            "timestamp": "2026-06-15T08:15:00Z",
+            "user_id": "ACM0001",
+            "device_id": "PC-1001",
+            "raw_payload": {"action": "Logon", "username": "acm0001"},
+            "ingest_metadata": {"agent_version": "0.1.0"},
+        }
+    )
+
+    sql, params = fake_conn.calls[0]
+    assert "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)" in sql
+    assert "ON CONFLICT(source_id) DO UPDATE SET" in sql
+    assert "RETURNING *" in sql
+    assert params[0] == "agent:PC-1001:logon:2026-06-15T08:15:00Z"
+    assert result["raw_payload"] == {"action": "Logon", "username": "acm0001"}
+    assert result["ingest_metadata"] == {"agent_version": "0.1.0"}
+
+
+def test_raw_log_json_fields_decode() -> None:
+    row = {
+        "id": 1,
+        "source_id": "test:1",
+        "collector_type": "endpoint_agent",
+        "event_type": "logon",
+        "timestamp": "2026-06-15T08:15:00Z",
+        "raw_payload_json": '{"action": "Logon"}',
+        "ingest_metadata_json": '{"agent_version": "0.1.0"}',
+        "created_at": "2026-06-15T00:00:00Z",
+    }
+    decoded = database._decode_raw_log_fields(row)
+    assert decoded["raw_payload"] == {"action": "Logon"}
+    assert decoded["ingest_metadata"] == {"agent_version": "0.1.0"}
+    assert "raw_payload_json" not in decoded
+    assert "ingest_metadata_json" not in decoded
+
+
+def test_raw_log_filters_use_percent_s_placeholders() -> None:
+    where, params = database._raw_log_filters(
+        {"user_id": "ACM0001", "device_id": "PC-1001", "event_type": "logon", "collector_type": "endpoint_agent"}
+    )
+    assert "user_id = %s" in where
+    assert "device_id = %s" in where
+    assert "event_type = %s" in where
+    assert "collector_type = %s" in where
+    assert params == ["ACM0001", "PC-1001", "logon", "endpoint_agent"]
+
+
+def test_batch_ingest_returns_errors_per_record(monkeypatch) -> None:
+    call_count = 0
+
+    def fake_ingest_raw_log(payload: dict) -> dict:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            raise RuntimeError("Simulated failure")
+        return {"id": call_count, "source_id": payload["source_id"]}
+
+    monkeypatch.setattr(database, "ingest_raw_log", fake_ingest_raw_log)
+
+    records = [
+        {"source_id": "test:1", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+        {"source_id": "test:2", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+        {"source_id": "test:3", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+    ]
+
+    result = database.batch_ingest_raw_logs(records)
+
+    assert result["created_or_updated"] == 2
+    assert result["failed"] == 1
+    assert len(result["errors"]) == 1
+    assert result["errors"][0]["index"] == 1
