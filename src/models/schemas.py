@@ -114,3 +114,30 @@ class EventIngest(BaseModel):
 class EventRead(EventIngest):
     id: int
     created_at: str
+
+
+class RawLogIngest(BaseModel):
+    source_id: str
+    collector_type: str
+    event_type: str
+    timestamp: str
+    user_id: str | None = None
+    device_id: str | None = None
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+    ingest_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RawLogRead(RawLogIngest):
+    id: int
+    normalized_event_id: int | None = None
+    created_at: str
+
+
+class RawLogBatchIngest(BaseModel):
+    records: list[RawLogIngest] = Field(max_length=1000)
+
+
+class RawLogBatchResult(BaseModel):
+    created_or_updated: int
+    failed: int
+    errors: list[dict[str, Any]]

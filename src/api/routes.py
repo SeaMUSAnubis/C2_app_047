@@ -15,6 +15,10 @@ from src.models.schemas import (
     LoginRequest,
     LoginResponse,
     PaginatedResponse,
+    RawLogBatchIngest,
+    RawLogBatchResult,
+    RawLogIngest,
+    RawLogRead,
     Role,
     UserCreate,
     UserRead,
@@ -201,6 +205,59 @@ async def logs(
         "offset": offset,
     }
     return _paginated(database.list_events(filters), database.count_events(filters), limit, offset)
+
+
+@router.post("/raw-logs/ingest", response_model=RawLogRead, status_code=status.HTTP_201_CREATED)
+async def ingest_raw_log(
+    payload: RawLogIngest,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> dict:
+    _ = current_account
+    return database.ingest_raw_log(payload.model_dump())
+
+
+@router.post("/raw-logs/batch", response_model=RawLogBatchResult)
+async def batch_ingest_raw_logs(
+    payload: RawLogBatchIngest,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> dict:
+    _ = current_account
+    result = database.batch_ingest_raw_logs([r.model_dump() for r in payload.records])
+    return result
+
+
+@router.get("/raw-logs", response_model=PaginatedResponse)
+async def raw_logs(
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+    user_id: str | None = None,
+    device_id: str | None = None,
+    event_type: str | None = None,
+    collector_type: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> PaginatedResponse:
+    _ = current_account
+    filters = {
+        "user_id": user_id,
+        "device_id": device_id,
+        "event_type": event_type,
+        "collector_type": collector_type,
+        "limit": limit,
+        "offset": offset,
+    }
+    return _paginated(database.list_raw_logs(filters), database.count_raw_logs(filters), limit, offset)
+
+
+@router.get("/raw-logs/{log_id}", response_model=RawLogRead)
+async def raw_log_detail(
+    log_id: int,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> dict:
+    _ = current_account
+    log = database.get_raw_log(log_id)
+    if not log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Raw log not found")
+    return log
 
 
 def _account_public(account: dict) -> AccountPublic:
