@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class HealthResponse(BaseModel):
@@ -116,15 +117,26 @@ class EventRead(EventIngest):
     created_at: str
 
 
+RawLogEventType = Literal[
+    "logon", "device", "file", "http", "email", "process", "network", "ldap", "psychometric", "custom"
+]
+
+
 class RawLogIngest(BaseModel):
     source_id: str
     collector_type: str
-    event_type: str
+    event_type: RawLogEventType
     timestamp: str
     user_id: str | None = None
     device_id: str | None = None
     raw_payload: dict[str, Any] = Field(default_factory=dict)
     ingest_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("timestamp")
+    @classmethod
+    def validate_iso_timestamp(cls, v: str) -> str:
+        datetime.fromisoformat(v.replace("Z", "+00:00"))
+        return v
 
 
 class RawLogRead(RawLogIngest):
@@ -134,7 +146,7 @@ class RawLogRead(RawLogIngest):
 
 
 class RawLogBatchIngest(BaseModel):
-    records: list[RawLogIngest] = Field(max_length=1000)
+    records: list[dict[str, Any]] = Field(max_length=1000)
 
 
 class RawLogBatchResult(BaseModel):

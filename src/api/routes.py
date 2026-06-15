@@ -1,7 +1,8 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import ValidationError
 
 from src.models.schemas import (
     AccountPublic,
@@ -222,8 +223,24 @@ async def batch_ingest_raw_logs(
     current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
 ) -> dict:
     _ = current_account
-    result = database.batch_ingest_raw_logs([r.model_dump() for r in payload.records])
-    return result
+    valid_records: list[dict[str, Any]] = []
+    failed = 0
+    errors: list[dict[str, Any]] = []
+    for idx, record in enumerate(payload.records):
+        try:
+            RawLogIngest.model_validate(record)
+            valid_records.append(record)
+        except ValidationError as exc:
+            failed += 1
+            errors.append({"index": idx, "error": exc.errors()[0]["msg"]})
+    if valid_records:
+        result = database.batch_ingest_raw_logs(valid_records)
+        created_or_updated = result["created_or_updated"]
+        failed += result["failed"]
+        errors.extend(result["errors"])
+    else:
+        created_or_updated = 0
+    return {"created_or_updated": created_or_updated, "failed": failed, "errors": errors}
 
 
 @router.get("/raw-logs", response_model=PaginatedResponse)
