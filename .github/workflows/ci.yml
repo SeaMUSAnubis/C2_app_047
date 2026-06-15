@@ -10,14 +10,21 @@ on:
 jobs:
   build:
     runs-on: self-hosted
+
     steps:
+      - name: Checkout code
         uses: actions/checkout@v4
-        run: echo "Running on cohort2-runner-01"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install dependencies
         run: pip install -r requirements.txt
+
       - name: Lint
         run: ruff check src tests
+
       - name: Test
         run: pytest
