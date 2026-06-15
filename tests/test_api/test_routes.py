@@ -220,17 +220,23 @@ async def test_batch_ingest_saves_valid_and_reports_invalid() -> None:
             json={
                 "records": [
                     {
-                        "source_id": "batch:1",
+                        "source_id": "batch:valid:1",
                         "collector_type": "endpoint_agent",
                         "event_type": "logon",
                         "timestamp": "2026-06-15T08:00:00Z",
                         "raw_payload": {"action": "Logon"},
                     },
                     {
-                        "source_id": "batch:2",
+                        "source_id": "batch:invalid:1",
+                        "collector_type": "endpoint_agent",
+                        "event_type": "invalid_type",
+                        "timestamp": "2026-06-15T08:01:00Z",
+                    },
+                    {
+                        "source_id": "batch:valid:2",
                         "collector_type": "endpoint_agent",
                         "event_type": "device",
-                        "timestamp": "2026-06-15T08:01:00Z",
+                        "timestamp": "2026-06-15T08:02:00Z",
                         "raw_payload": {"action": "USBInsert"},
                     },
                 ]
@@ -239,8 +245,26 @@ async def test_batch_ingest_saves_valid_and_reports_invalid() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["created_or_updated"] == 2
-    assert data["failed"] == 0
-    assert data["errors"] == []
+    assert data["failed"] == 1
+    assert data["errors"][0]["index"] == 1
+
+
+@pytest.mark.asyncio
+@requires_postgres
+async def test_single_ingest_rejects_invalid_event_type() -> None:
+    async with get_test_client(init_db=True) as client:
+        token = await _admin_token(client)
+        response = await client.post(
+            "/api/raw-logs/ingest",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "source_id": "test:bad_type",
+                "collector_type": "endpoint_agent",
+                "event_type": "lgoon",
+                "timestamp": "2026-06-15T08:15:00Z",
+            },
+        )
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

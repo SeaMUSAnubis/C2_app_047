@@ -63,6 +63,7 @@ def test_initialize_database_uses_postgresql_schema(monkeypatch) -> None:
     assert "ON CONFLICT(email) DO NOTHING" in all_sql
     assert "ON CONFLICT(id) DO NOTHING" in all_sql
     assert "CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp" in all_sql
+    assert "CHECK (event_type IN (" in all_sql
     assert "AUTOINCREMENT" not in all_sql
     assert "PRAGMA" not in all_sql
 
@@ -168,14 +169,29 @@ def test_raw_log_schema_keeps_arbitrary_raw_payload() -> None:
     assert log.raw_payload["nested"]["a"] == 1
 
 
-def test_raw_log_batch_schema_max_1000_records() -> None:
-    records = [
+def test_raw_log_schema_rejects_invalid_event_type() -> None:
+    with pytest.raises(ValidationError, match="event_type"):
         RawLogIngest(
-            source_id=f"test:{i}",
+            source_id="test:1",
             collector_type="endpoint_agent",
-            event_type="logon",
+            event_type="lgoon",
             timestamp="2026-06-15T08:15:00Z",
         )
+
+
+def test_raw_log_schema_rejects_invalid_timestamp() -> None:
+    with pytest.raises(ValidationError, match="timestamp"):
+        RawLogIngest(
+            source_id="test:1",
+            collector_type="endpoint_agent",
+            event_type="logon",
+            timestamp="not-a-date",
+        )
+
+
+def test_raw_log_batch_schema_max_1000_records() -> None:
+    records = [
+        {"source_id": f"test:{i}", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-06-15T08:15:00Z"}
         for i in range(1001)
     ]
     with pytest.raises(ValidationError):
@@ -245,14 +261,30 @@ def test_raw_log_filters_use_percent_s_placeholders() -> None:
 def test_batch_ingest_returns_errors_per_record(monkeypatch) -> None:
     call_count = 0
 
-    def fake_ingest_raw_log(payload: dict) -> dict:
-        nonlocal call_count
-        call_count += 1
-        if call_count == 2:
-            raise RuntimeError("Simulated failure")
-        return {"id": call_count, "source_id": payload["source_id"]}
+    class BatchFakeCursor:
+        def fetchone(self):
+            return None
 
-    monkeypatch.setattr(database, "ingest_raw_log", fake_ingest_raw_log)
+    class BatchFakeConnection:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, sql, params=None):
+            self.calls.append((sql, params))
+            nonlocal call_count
+            if "INSERT INTO raw_user_logs" in sql:
+                call_count += 1
+                if call_count == 2:
+                    raise RuntimeError("Simulated failure")
+            return BatchFakeCursor()
+
+    fake_conn = BatchFakeConnection()
+
+    @contextmanager
+    def fake_get_connection():
+        yield fake_conn
+
+    monkeypatch.setattr(database, "get_connection", fake_get_connection)
 
     records = [
         {"source_id": "test:1", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
