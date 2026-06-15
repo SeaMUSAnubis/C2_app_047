@@ -113,11 +113,16 @@ def test_postgresql_filters_use_percent_s_placeholders() -> None:
     user_where, user_params = database._user_filters(
         {"department": "Finance", "status": "active", "search": "alice"}
     )
-    event_where, event_params = database._event_filters({"user_id": "ACM0001", "event_type": "logon"})
+    event_where, event_params = database._event_filters(
+        {"user_id": "ACM0001", "event_type": "logon"}
+    )
 
     assert "department = %s" in user_where
     assert "status = %s" in user_where
-    assert "(lower(username) LIKE %s OR lower(full_name) LIKE %s OR lower(email) LIKE %s)" in user_where
+    assert (
+        "(lower(username) LIKE %s OR lower(full_name) LIKE %s OR lower(email) LIKE %s)"
+        in user_where
+    )
     assert user_params == ["Finance", "active", "%alice%", "%alice%", "%alice%"]
     assert event_where == ["user_id = %s", "event_type = %s"]
     assert event_params == ["ACM0001", "logon"]
@@ -199,7 +204,12 @@ def test_raw_log_schema_rejects_invalid_timestamp() -> None:
 
 def test_raw_log_batch_schema_max_1000_records() -> None:
     records = [
-        {"source_id": f"test:{i}", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-06-15T08:15:00Z"}
+        {
+            "source_id": f"test:{i}",
+            "collector_type": "agent",
+            "event_type": "logon",
+            "timestamp": "2026-06-15T08:15:00Z",
+        }
         for i in range(1001)
     ]
     with pytest.raises(ValidationError):
@@ -257,7 +267,12 @@ def test_raw_log_json_fields_decode() -> None:
 
 def test_raw_log_filters_use_percent_s_placeholders() -> None:
     where, params = database._raw_log_filters(
-        {"user_id": "ACM0001", "device_id": "PC-1001", "event_type": "logon", "collector_type": "endpoint_agent"}
+        {
+            "user_id": "ACM0001",
+            "device_id": "PC-1001",
+            "event_type": "logon",
+            "collector_type": "endpoint_agent",
+        }
     )
     assert "user_id = %s" in where
     assert "device_id = %s" in where
@@ -295,9 +310,24 @@ def test_batch_ingest_returns_errors_per_record(monkeypatch) -> None:
     monkeypatch.setattr(database, "get_connection", fake_get_connection)
 
     records = [
-        {"source_id": "test:1", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
-        {"source_id": "test:2", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
-        {"source_id": "test:3", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+        {
+            "source_id": "test:1",
+            "collector_type": "agent",
+            "event_type": "logon",
+            "timestamp": "2026-01-01T00:00:00Z",
+        },
+        {
+            "source_id": "test:2",
+            "collector_type": "agent",
+            "event_type": "logon",
+            "timestamp": "2026-01-01T00:00:00Z",
+        },
+        {
+            "source_id": "test:3",
+            "collector_type": "agent",
+            "event_type": "logon",
+            "timestamp": "2026-01-01T00:00:00Z",
+        },
     ]
 
     result = database.batch_ingest_raw_logs(records)
@@ -413,9 +443,24 @@ def test_batch_ingest_release_savepoint_on_error(monkeypatch) -> None:
     monkeypatch.setattr(database, "get_connection", fake_get_connection)
 
     records = [
-        {"source_id": "test:1", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
-        {"source_id": "test:2", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
-        {"source_id": "test:3", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+        {
+            "source_id": "test:1",
+            "collector_type": "agent",
+            "event_type": "logon",
+            "timestamp": "2026-01-01T00:00:00Z",
+        },
+        {
+            "source_id": "test:2",
+            "collector_type": "agent",
+            "event_type": "logon",
+            "timestamp": "2026-01-01T00:00:00Z",
+        },
+        {
+            "source_id": "test:3",
+            "collector_type": "agent",
+            "event_type": "logon",
+            "timestamp": "2026-01-01T00:00:00Z",
+        },
     ]
 
     result = database.batch_ingest_raw_logs(records)
@@ -425,7 +470,8 @@ def test_batch_ingest_release_savepoint_on_error(monkeypatch) -> None:
 
     rollback_count = sum(1 for sql in fake_conn.calls if "ROLLBACK TO SAVEPOINT" in sql)
     release_after_rollback = sum(
-        1 for i, sql in enumerate(fake_conn.calls)
+        1
+        for i, sql in enumerate(fake_conn.calls)
         if "RELEASE SAVEPOINT" in sql
         and i > 0
         and "ROLLBACK TO SAVEPOINT" in fake_conn.calls[i - 1]
