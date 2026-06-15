@@ -21,7 +21,7 @@ docker-compose.yml
 Makefile
 ```
 
-Chi tiết chuẩn thư mục nằm ở [docs/REPO_STRUCTURE_STANDARD.md](docs/REPO_STRUCTURE_STANDARD.md).
+Chi tiết chuẩn thư mục nằm ở [docs/standards/REPO_STRUCTURE_STANDARD.md](docs/standards/REPO_STRUCTURE_STANDARD.md).
 
 ## Data
 
@@ -30,7 +30,7 @@ Repo tách dữ liệu theo vòng đời:
 - `data/raw/cert-r4.2/`: raw CERT dataset, local only, không commit.
 - `data/sample/cert-r4.2-small/`: sample nhỏ để smoke test/demo nhanh, local only.
 - `artifacts/`: feature matrix, model binary, scores, local/generated.
-- Schema và data contract nằm trong `docs/DATA_CONTRACT.md`.
+- Schema và data contract nằm trong `docs/contracts/DATA_CONTRACT.md`.
 
 ## ML pipeline hiện có
 
@@ -67,7 +67,7 @@ Output chính:
 
 | Mảng | Thư mục | Deliverable |
 |---|---|---|
-| Product/PM | `docs/`, `JOURNAL.md`, `WORKLOG.md` | PRD, user story, task assignment |
+| Product/PM | `docs/`, `docs/management/JOURNAL.md`, `docs/management/WORKLOG.md` | PRD, user story, task assignment |
 | API/backend | `src/api/`, `src/models/`, `src/main.py` | FastAPI app, schemas, service API |
 | Data/ML | `src/services/ueba_ml/`, `data/`, `artifacts/`, `eval/` | Feature pipeline, model training, scoring, reports |
 | Agent/LLM workflow | `src/agents/`, `src/services/` | Alert explanation workflow and services |
@@ -97,8 +97,8 @@ bash scripts/_pyrun.sh scripts/log_manual.py --tool chatgpt --prompt "<what you 
 
 ## Tài liệu
 
-- [docs/BRIEF.md](docs/BRIEF.md)
-- [docs/PRD.md](docs/PRD.md)
-- [docs/UEBA_REQUIREMENTS.md](docs/UEBA_REQUIREMENTS.md)
-- [docs/REPO_STRUCTURE_STANDARD.md](docs/REPO_STRUCTURE_STANDARD.md)
-- [docs/UI_FLOW.svg](docs/UI_FLOW.svg)
+- [docs/planning/BRIEF.md](docs/planning/BRIEF.md)
+- [docs/planning/PRD.md](docs/planning/PRD.md)
+- [docs/planning/UEBA_REQUIREMENTS.md](docs/planning/UEBA_REQUIREMENTS.md)
+- [docs/standards/REPO_STRUCTURE_STANDARD.md](docs/standards/REPO_STRUCTURE_STANDARD.md)
+- [docs/assets/UI_FLOW.svg](docs/assets/UI_FLOW.svg)
