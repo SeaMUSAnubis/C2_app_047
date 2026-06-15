@@ -436,6 +436,7 @@ def batch_ingest_raw_logs(records: list[dict[str, Any]]) -> dict[str, Any]:
             except Exception:
                 logger.exception("Failed to ingest raw log at index %d", idx)
                 conn.execute("ROLLBACK TO SAVEPOINT sp_raw_batch")
+                conn.execute("RELEASE SAVEPOINT sp_raw_batch")
                 failed += 1
                 errors.append({"index": idx, "error": "failed_to_ingest_record"})
     return {"created_or_updated": created_or_updated, "failed": failed, "errors": errors}
@@ -487,10 +488,24 @@ _RAW_LOG_EVENT_TYPES = (
 def _ensure_raw_user_logs_event_type_check(conn: Any) -> None:
     constraint_name = "raw_user_logs_event_type_check"
     row = conn.execute(
-        "SELECT 1 FROM pg_constraint WHERE conname = %s", (constraint_name,)
+        """
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class r ON r.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = r.relnamespace
+        WHERE r.relname = 'raw_user_logs'
+          AND c.conname = %s
+          AND c.contype = 'c'
+        """,
+        (constraint_name,),
     ).fetchone()
     if row is None:
         values = ", ".join(f"'{v}'" for v in _RAW_LOG_EVENT_TYPES)
+        placeholders = ", ".join(["%s"] * len(_RAW_LOG_EVENT_TYPES))
+        conn.execute(
+            f"UPDATE raw_user_logs SET event_type = 'custom' WHERE event_type NOT IN ({placeholders})",
+            list(_RAW_LOG_EVENT_TYPES),
+        )
         conn.execute(
             f"ALTER TABLE raw_user_logs ADD CONSTRAINT {constraint_name} CHECK (event_type IN ({values}))"
         )
