@@ -68,6 +68,10 @@ def test_initialize_database_uses_postgresql_schema(monkeypatch) -> None:
     assert "CHECK (event_type IN (" in all_sql
     assert "ALTER TABLE raw_user_logs ADD CONSTRAINT" in all_sql
     assert "idx_raw_user_logs_collector_type" in all_sql
+    assert "UPDATE raw_user_logs SET event_type = 'custom'" in all_sql
+    assert "pg_constraint c" in all_sql
+    assert "pg_class r" in all_sql
+    assert "pg_namespace n" in all_sql
     assert "AUTOINCREMENT" not in all_sql
     assert "PRAGMA" not in all_sql
 
@@ -303,3 +307,131 @@ def test_batch_ingest_returns_errors_per_record(monkeypatch) -> None:
     assert len(result["errors"]) == 1
     assert result["errors"][0]["index"] == 1
     assert result["errors"][0]["error"] == "failed_to_ingest_record"
+
+
+def test_migration_skips_alter_when_constraint_exists(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class ConstraintExistsCursor:
+        def fetchone(self):
+            return {"1": 1}
+
+        def fetchall(self):
+            return []
+
+    class ConstraintExistsConnection:
+        def execute(self, sql, params=None):
+            calls.append(sql)
+            return ConstraintExistsCursor()
+
+    fake_conn = ConstraintExistsConnection()
+
+    @contextmanager
+    def fake_get_connection():
+        yield fake_conn
+
+    monkeypatch.setattr(database, "get_connection", fake_get_connection)
+    monkeypatch.setattr(database, "hash_password", lambda password: f"hashed:{password}")
+
+    database.initialize_database()
+
+    all_sql = "\n".join(calls)
+    assert "ALTER TABLE raw_user_logs" not in all_sql
+    assert "UPDATE raw_user_logs SET event_type" not in all_sql
+
+
+def test_migration_auto_fixes_invalid_event_type(monkeypatch) -> None:
+    update_calls: list[tuple[str, tuple | list | None]] = []
+
+    class AutoFixCursor:
+        def __init__(self, constraint_exists=False):
+            self._constraint_exists = constraint_exists
+
+        def fetchone(self):
+            if self._constraint_exists:
+                return {"1": 1}
+            return None
+
+        def fetchall(self):
+            return []
+
+    class AutoFixConnection:
+        def __init__(self):
+            self.constraint_exists = False
+
+        def execute(self, sql, params=None):
+            if "UPDATE raw_user_logs SET event_type" in sql:
+                update_calls.append((sql, params))
+            if "ALTER TABLE" in sql:
+                self.constraint_exists = True
+            return AutoFixCursor(constraint_exists=self.constraint_exists)
+
+    fake_conn = AutoFixConnection()
+
+    @contextmanager
+    def fake_get_connection():
+        yield fake_conn
+
+    monkeypatch.setattr(database, "get_connection", fake_get_connection)
+    monkeypatch.setattr(database, "hash_password", lambda password: f"hashed:{password}")
+
+    database.initialize_database()
+
+    assert len(update_calls) == 1
+    sql, params = update_calls[0]
+    assert "SET event_type = 'custom'" in sql
+    assert "NOT IN" in sql
+    assert params == list(database._RAW_LOG_EVENT_TYPES)
+
+
+def test_batch_ingest_release_savepoint_on_error(monkeypatch) -> None:
+    call_count = 0
+
+    class BatchFakeCursor:
+        def fetchone(self):
+            return None
+
+    class BatchFakeConnection:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, sql, params=None):
+            self.calls.append(sql)
+            nonlocal call_count
+            if "INSERT INTO raw_user_logs" in sql:
+                call_count += 1
+                if call_count == 2:
+                    raise RuntimeError("Simulated failure")
+            return BatchFakeCursor()
+
+    fake_conn = BatchFakeConnection()
+
+    @contextmanager
+    def fake_get_connection():
+        yield fake_conn
+
+    monkeypatch.setattr(database, "get_connection", fake_get_connection)
+
+    records = [
+        {"source_id": "test:1", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+        {"source_id": "test:2", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+        {"source_id": "test:3", "collector_type": "agent", "event_type": "logon", "timestamp": "2026-01-01T00:00:00Z"},
+    ]
+
+    result = database.batch_ingest_raw_logs(records)
+
+    assert result["created_or_updated"] == 2
+    assert result["failed"] == 1
+
+    rollback_count = sum(1 for sql in fake_conn.calls if "ROLLBACK TO SAVEPOINT" in sql)
+    release_after_rollback = sum(
+        1 for i, sql in enumerate(fake_conn.calls)
+        if "RELEASE SAVEPOINT" in sql
+        and i > 0
+        and "ROLLBACK TO SAVEPOINT" in fake_conn.calls[i - 1]
+    )
+    release_success = sum(1 for sql in fake_conn.calls if "RELEASE SAVEPOINT" in sql)
+
+    assert rollback_count == 1
+    assert release_after_rollback == 1
+    assert release_success >= 2
