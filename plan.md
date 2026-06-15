@@ -186,54 +186,55 @@ Chạy:
 
 ### 1. Tổng quan: code đã đáp ứng plan chưa?
 
-Phần code hiện tại đã đáp ứng phần lớn mục tiêu trong `plan.md` cho backend raw log collection. Các thay đổi đang có trong repo tập trung vào:
+Đã đáp ứng phần lớn các điểm còn thiếu trong `plan.md` cho backend raw log collection.
 
-- `src/models/schemas.py`: thêm validate `event_type`, validate timestamp ISO và cho batch nhận raw dict để bắt lỗi theo từng record.
-- `src/api/routes.py`: batch endpoint validate từng record thay vì để FastAPI fail toàn bộ request.
-- `src/services/database.py`: thêm CHECK constraint cho `event_type`, batch ingest dùng một connection và savepoint theo từng record.
-- `tests/test_api/test_routes.py` và `tests/test_services/test_database.py`: bổ sung test cho invalid event type, partial batch success/failure và batch DB behavior.
+Trạng thái repo hiện tại:
+
+- `git status` còn thay đổi ở 3 file: `src/api/routes.py`, `src/services/database.py`, `tests/test_services/test_database.py`.
+- Diff hiện tại đã xử lý các điểm review trước đó:
+  - Batch route dùng dữ liệu đã validate qua `validated.model_dump()`.
+  - Batch service không còn trả `str(exc)` trực tiếp ra response.
+  - Có index mới cho `collector_type`.
+  - Có helper đảm bảo CHECK constraint cho `event_type`.
+  - Savepoint được release khi record batch ingest thành công.
 
 Kết quả kiểm tra hiện tại:
 
 - `ruff check src tests`: pass.
 - `pytest -q`: `19 passed, 13 skipped`.
 
-Tuy nhiên vẫn chưa nên xem là hoàn tất để merge, vì còn một số rủi ro đáng sửa trước, đặc biệt ở migration DB hiện có và cách trả lỗi DB ra ngoài API.
+Nhìn chung code đã tiến gần plan hơn bản trước, nhưng vẫn chưa nên merge như trạng thái cuối cùng vì phần migration constraint còn rủi ro trên database cũ và nhánh lỗi của savepoint còn có thể cải thiện.
 
 ### 2. Vấn đề nghiêm trọng cần sửa
 
-- Migration DB chưa thật sự an toàn với bảng đã tồn tại.
-  - `raw_user_logs` hiện thêm `CHECK (event_type IN (...))` trong câu `CREATE TABLE IF NOT EXISTS`.
-  - Nếu database đã từng được tạo bằng version cũ không có CHECK constraint, câu `CREATE TABLE IF NOT EXISTS` sẽ không cập nhật schema.
-  - Kết quả là môi trường cũ vẫn có thể lưu `event_type` sai, dù code mới đã validate ở API.
-  - Nên thêm migration/idempotent schema upgrade: kiểm tra `pg_constraint`, nếu chưa có constraint thì `ALTER TABLE raw_user_logs ADD CONSTRAINT ... CHECK (...)`.
+- Migration CHECK constraint vẫn có thể fail khi DB cũ đã có dữ liệu invalid.
+  - Ở `src/services/database.py`, `_ensure_raw_user_logs_event_type_check()` chạy `ALTER TABLE raw_user_logs ADD CONSTRAINT ... CHECK (...)`.
+  - Nếu bảng `raw_user_logs` đã tồn tại từ version cũ và có `event_type` ngoài danh sách hợp lệ, PostgreSQL sẽ reject constraint.
+  - Khi đó `initialize_database()` có thể fail lúc app khởi động.
+  - Cần quyết định rõ trong plan/code: auto-migrate invalid `event_type` thành `custom`, hoặc detect trước rồi raise lỗi có message rõ ràng để người vận hành sửa dữ liệu.
 
-- Batch service đang trả lỗi DB thô ra response.
-  - Trong `batch_ingest_raw_logs()`, khi insert/upsert fail, code append `{"index": idx, "error": str(exc)}`.
-  - `str(exc)` có thể lộ chi tiết nội bộ của PostgreSQL, tên constraint, cấu trúc bảng hoặc một phần dữ liệu lỗi.
-  - Với endpoint ingest raw data, đây là rủi ro bảo mật và làm API contract khó ổn định.
-  - Nên log exception chi tiết ở server, nhưng response chỉ trả lỗi đã sanitize như `database_error` hoặc `failed_to_ingest_record`.
+- Kiểm tra constraint chưa scope theo đúng table/schema.
+  - Query hiện chỉ kiểm tra `pg_constraint` theo `conname`.
+  - `conname` không đủ chặt nếu có constraint trùng tên ở schema/table khác.
+  - Nên join `pg_constraint`, `pg_class`, `pg_namespace` và filter đúng `raw_user_logs`, đồng thời filter `contype = 'c'`.
 
 ### 3. Vấn đề nhỏ / cải thiện nên làm
 
-- Savepoint trong batch ingest chưa được release sau record thành công.
-  - Code tạo `SAVEPOINT sp_raw_batch` cho từng record và rollback khi lỗi, nhưng record thành công không gọi `RELEASE SAVEPOINT`.
-  - PostgreSQL sẽ xử lý khi transaction kết thúc, nhưng với batch lớn thì nên release để giảm tài nguyên transaction.
+- Record lỗi trong batch rollback savepoint nhưng chưa release savepoint.
+  - Code rollback bằng `ROLLBACK TO SAVEPOINT sp_raw_batch`.
+  - Tuy nhiên `ROLLBACK TO SAVEPOINT` không xóa savepoint.
+  - Với batch có nhiều lỗi, các savepoint có thể tồn tại không cần thiết đến cuối transaction.
+  - Nên gọi thêm `RELEASE SAVEPOINT sp_raw_batch` sau rollback thành công.
 
-- Batch route validate record nhưng vẫn append raw dict.
-  - Trong `/raw-logs/batch`, code gọi `RawLogIngest.model_validate(record)` nhưng sau đó append lại `record`.
-  - Nên dùng `validated = RawLogIngest.model_validate(record)` rồi `valid_records.append(validated.model_dump())`.
-  - Điều này đảm bảo dữ liệu truyền xuống service là dữ liệu đã normalize/validated bởi schema.
-
-- Filter `collector_type` chưa có index riêng.
-  - Query list raw logs có filter `collector_type`, nhưng DB mới chỉ có index theo `timestamp`, `user_id`, `device_id`, `event_type`.
-  - Nếu dữ liệu raw log tăng lớn, filter theo collector sẽ chậm.
-  - Nên thêm `idx_raw_user_logs_collector_type`.
+- Test chưa cover migration với dữ liệu invalid hoặc constraint đã tồn tại.
+  - Test hiện chỉ assert SQL có `ALTER TABLE`.
+  - Nên thêm test cho case constraint đã tồn tại thì không alter.
+  - Nên thêm test cho case dữ liệu cũ có `event_type` invalid được xử lý theo policy đã chọn.
 
 - Timestamp validator vẫn hơi lỏng.
   - Validator hiện dùng `datetime.fromisoformat(v.replace("Z", "+00:00"))`.
   - Cách này chấp nhận timestamp không timezone.
-  - Nếu pipeline sau cần dữ liệu thời gian nhất quán, nên yêu cầu timezone rõ ràng hoặc normalize tất cả về UTC trước khi lưu.
+  - Với dữ liệu UEBA dạng time-series, nên yêu cầu timezone rõ ràng hoặc normalize tất cả về UTC trước khi lưu.
 
 - Test PostgreSQL thật vẫn bị skip nếu không có `TEST_DATABASE_URL`.
   - Local hiện tại pass unit/API tests, nhưng các test phụ thuộc PostgreSQL cần chạy trên môi trường có database thật trước khi merge.
@@ -247,12 +248,13 @@ Tuy nhiên vẫn chưa nên xem là hoàn tất để merge, vì còn một số
 
 - `src/api/routes.py`
   - `batch_ingest_raw_logs()`
-  - Logic validate từng record và build `valid_records`.
+  - Logic validate từng record và append `validated.model_dump()`.
 
 - `src/services/database.py`
   - `init_database()` tạo bảng `raw_user_logs`.
-  - `batch_ingest_raw_logs()` dùng savepoint và trả per-record errors.
-  - Indexes cho `raw_user_logs`.
+  - `_ensure_raw_user_logs_event_type_check()` kiểm tra/thêm CHECK constraint.
+  - `batch_ingest_raw_logs()` dùng savepoint, sanitize lỗi DB và trả per-record errors.
+  - Index `idx_raw_user_logs_collector_type`.
 
 - `tests/test_api/test_routes.py`
   - Test batch partial success/failure.
@@ -264,26 +266,27 @@ Tuy nhiên vẫn chưa nên xem là hoàn tất để merge, vì còn một số
 
 ### 5. Đề xuất hướng sửa cụ thể
 
-- Thêm schema migration idempotent cho constraint:
-  - Kiểm tra constraint bằng `pg_constraint`.
-  - Nếu chưa có thì chạy `ALTER TABLE raw_user_logs ADD CONSTRAINT raw_user_logs_event_type_check CHECK (...)`.
-  - Nếu dữ liệu cũ có `event_type` invalid, cần quyết định migrate thành `custom` hoặc báo lỗi rõ trong migration.
+- Sửa `_ensure_raw_user_logs_event_type_check()` để kiểm tra constraint theo đúng table/schema:
+  - Join `pg_constraint`, `pg_class`, `pg_namespace`.
+  - Filter `relname = 'raw_user_logs'`.
+  - Filter `conname = 'raw_user_logs_event_type_check'`.
+  - Filter `contype = 'c'`.
 
-- Sanitize lỗi batch DB:
-  - Trong `batch_ingest_raw_logs()`, không trả `str(exc)` trực tiếp.
-  - Log chi tiết exception ở server.
-  - Response chỉ trả error code/message ổn định, ví dụ `{"index": idx, "error": "failed_to_ingest_record"}`.
+- Trước khi `ALTER TABLE ADD CONSTRAINT`, xử lý dữ liệu invalid:
+  - Nếu chấp nhận auto-fix, update invalid `event_type` thành `custom`.
+  - Nếu không auto-fix, query trước các invalid values và raise lỗi rõ ràng.
 
-- Release savepoint sau mỗi record thành công:
-  - Sau khi insert/upsert thành công, gọi `RELEASE SAVEPOINT sp_raw_batch`.
-  - Giữ rollback savepoint cho record lỗi.
+- Trong nhánh lỗi của `batch_ingest_raw_logs()`:
+  - Sau `ROLLBACK TO SAVEPOINT sp_raw_batch`, gọi thêm `RELEASE SAVEPOINT sp_raw_batch`.
+  - Giữ response sanitized là `failed_to_ingest_record`.
 
-- Dùng output đã validate trong route batch:
-  - `validated = RawLogIngest.model_validate(record)`.
-  - `valid_records.append(validated.model_dump())`.
+- Thêm test migration:
+  - Constraint đã tồn tại thì không chạy `ALTER TABLE`.
+  - Có dữ liệu invalid thì behavior đúng theo policy đã chọn.
 
-- Bổ sung index:
-  - `CREATE INDEX IF NOT EXISTS idx_raw_user_logs_collector_type ON raw_user_logs(collector_type)`.
+- Thêm test batch:
+  - Batch có nhiều record lỗi vẫn rollback/release savepoint đúng.
+  - Error response không lộ exception message gốc.
 
 - Siết timestamp nếu cần dữ liệu phân tích chính xác:
   - Yêu cầu timezone trong timestamp.
@@ -296,11 +299,8 @@ Tuy nhiên vẫn chưa nên xem là hoàn tất để merge, vì còn một số
 
 ### 6. Kết luận: có nên merge/commit chưa?
 
-Chưa nên merge/commit phần raw log collection như trạng thái cuối cùng. Code đã tiến gần plan hơn bản trước và các lỗi lớn ban đầu về batch per-record validation, `event_type` validation và batch connection đã được xử lý ở mức code mới.
+Chưa nên merge ngay nếu mục tiêu là production-ready migration.
 
-Tuy nhiên trước khi merge cần sửa ít nhất 2 điểm:
+Code hiện tại đã tốt hơn bản review trước và pass lint/test, nhưng migration constraint vẫn có rủi ro làm app fail khi chạy trên DB cũ có dữ liệu `event_type` không hợp lệ. Ngoài ra nhánh lỗi của batch savepoint nên release savepoint sau rollback để tránh tích lũy subtransaction không cần thiết.
 
-- Thêm migration/idempotent update cho DB đã tồn tại để đảm bảo `CHECK event_type` thật sự có hiệu lực.
-- Không trả `str(exc)` từ database ra API response.
-
-Sau khi sửa hai điểm trên và chạy lại lint/test, phần này mới đủ ổn để commit/merge.
+Có thể commit tạm nếu đây là checkpoint nội bộ, nhưng trước khi merge nên sửa phần migration constraint và release savepoint ở nhánh lỗi.
