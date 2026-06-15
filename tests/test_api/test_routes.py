@@ -19,16 +19,45 @@ async def test_health_endpoint() -> None:
 
 @pytest.mark.asyncio
 @requires_postgres
+async def test_login_returns_frontend_compatible_response() -> None:
+    async with get_test_client(init_db=True) as client:
+        login = await client.post(
+            "/api/auth/login", json={"email": "admin@demo.com", "password": "admin123"}
+        )
+        assert login.status_code == 200
+        data = login.json()
+        assert "accessToken" in data
+        assert "access_token" not in data
+        assert data["user"]["email"] == "admin@demo.com"
+        assert data["user"]["name"] == "Demo Admin"
+        assert data["user"]["role"] == "admin"
+        assert data["user"]["id"]
+
+
+@pytest.mark.asyncio
+@requires_postgres
 async def test_login_and_me_endpoint() -> None:
     async with get_test_client(init_db=True) as client:
-        login = await client.post("/api/auth/login", json={"email": "admin@demo.com", "password": "admin123"})
+        login = await client.post(
+            "/api/auth/login", json={"email": "admin@demo.com", "password": "admin123"}
+        )
         assert login.status_code == 200
-        token = login.json()["access_token"]
+        token = login.json()["accessToken"]
 
         me = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.json()["email"] == "admin@demo.com"
     assert me.json()["role"] == "admin"
+
+
+@pytest.mark.asyncio
+@requires_postgres
+async def test_login_invalid_credentials() -> None:
+    async with get_test_client(init_db=True) as client:
+        response = await client.post(
+            "/api/auth/login", json={"email": "admin@demo.com", "password": "wrong"}
+        )
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -44,8 +73,10 @@ async def test_protected_endpoint_requires_token() -> None:
 @requires_postgres
 async def test_analyst_cannot_create_user() -> None:
     async with get_test_client(init_db=True) as client:
-        login = await client.post("/api/auth/login", json={"email": "analyst@demo.com", "password": "analyst123"})
-        token = login.json()["access_token"]
+        login = await client.post(
+            "/api/auth/login", json={"email": "analyst@demo.com", "password": "analyst123"}
+        )
+        token = login.json()["accessToken"]
 
         response = await client.post(
             "/api/users",
@@ -63,17 +94,85 @@ async def test_analyst_cannot_create_user() -> None:
 
 @pytest.mark.asyncio
 @requires_postgres
-async def test_admin_can_read_seed_users_and_devices() -> None:
+async def test_users_returns_frontend_compatible_array() -> None:
     async with get_test_client(init_db=True) as client:
         token = await _admin_token(client)
 
         users = await client.get("/api/users", headers={"Authorization": f"Bearer {token}"})
-        devices = await client.get("/api/devices", headers={"Authorization": f"Bearer {token}"})
 
     assert users.status_code == 200
-    assert users.json()["total"] >= 3
+    data = users.json()
+    assert isinstance(data, list)
+    assert len(data) >= 3
+    item = data[0]
+    assert "id" in item
+    assert "account" in item
+    assert "name" in item
+    assert "department" in item
+    assert "role" in item
+    assert "status" in item
+    assert "riskScore" in item
+    assert "assignedDevices" in item
+    assert "openAlerts" in item
+
+
+@pytest.mark.asyncio
+@requires_postgres
+async def test_devices_returns_frontend_compatible_array() -> None:
+    async with get_test_client(init_db=True) as client:
+        token = await _admin_token(client)
+
+        devices = await client.get("/api/devices", headers={"Authorization": f"Bearer {token}"})
+
     assert devices.status_code == 200
-    assert devices.json()["total"] >= 3
+    data = devices.json()
+    assert isinstance(data, list)
+    assert len(data) >= 3
+    item = data[0]
+    assert "id" in item
+    assert "hostname" in item
+    assert "assignedUser" in item
+    assert "status" in item
+    assert item["status"] in ("active", "inactive")
+    assert "riskScore" in item
+    assert "openAlerts" in item
+
+
+@pytest.mark.asyncio
+@requires_postgres
+async def test_logs_returns_frontend_compatible_array() -> None:
+    async with get_test_client(init_db=True) as client:
+        token = await _admin_token(client)
+
+        logs = await client.get("/api/logs", headers={"Authorization": f"Bearer {token}"})
+
+    assert logs.status_code == 200
+    data = logs.json()
+    assert isinstance(data, list)
+
+
+@pytest.mark.asyncio
+@requires_postgres
+async def test_dashboard_summary_returns_frontend_compatible_response() -> None:
+    async with get_test_client(init_db=True) as client:
+        token = await _admin_token(client)
+
+        response = await client.get(
+            "/api/dashboard/summary", headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "totalUsers" in data
+    assert "totalDevices" in data
+    assert "totalLogs" in data
+    assert "openAlerts" in data
+    assert "highCriticalAlerts" in data
+    assert "averageRiskScore" in data
+    assert isinstance(data["totalUsers"], int)
+    assert isinstance(data["totalDevices"], int)
+    assert data["totalUsers"] >= 3
+    assert data["totalDevices"] >= 3
 
 
 @pytest.mark.asyncio
@@ -94,30 +193,59 @@ async def test_ingest_log_is_idempotent_by_source_id() -> None:
             "raw": {"line": 1},
         }
 
-        first = await client.post("/api/logs/ingest", headers={"Authorization": f"Bearer {token}"}, json=payload)
-        second = await client.post("/api/logs/ingest", headers={"Authorization": f"Bearer {token}"}, json=payload)
-        logs = await client.get(
-            "/api/logs?user_id=ACM0001&event_type=logon",
-            headers={"Authorization": f"Bearer {token}"},
+        first = await client.post(
+            "/api/logs/ingest", headers={"Authorization": f"Bearer {token}"}, json=payload
+        )
+        second = await client.post(
+            "/api/logs/ingest", headers={"Authorization": f"Bearer {token}"}, json=payload
         )
 
     assert first.status_code == 201
     assert second.status_code == 201
     assert first.json()["id"] == second.json()["id"]
+
+
+@pytest.mark.asyncio
+@requires_postgres
+async def test_ingest_then_logs_appear_in_frontend_endpoint() -> None:
+    async with get_test_client(init_db=True) as client:
+        token = await _admin_token(client)
+        payload = {
+            "source_id": "pytest:logon:frontend:1",
+            "source_file": "logon.csv",
+            "timestamp": "2010-01-04T08:15:00Z",
+            "user_id": "ACM0001",
+            "device_id": "PC-1001",
+            "event_type": "logon",
+            "action": "Logon",
+            "resource": "PC-1001",
+        }
+        await client.post(
+            "/api/logs/ingest", headers={"Authorization": f"Bearer {token}"}, json=payload
+        )
+
+        logs = await client.get("/api/logs", headers={"Authorization": f"Bearer {token}"})
+
     assert logs.status_code == 200
-    assert any(item["source_id"] == "pytest:logon:1" for item in logs.json()["items"])
+    data = logs.json()
+    assert isinstance(data, list)
+    assert any(item["sourceId"] == "pytest:logon:frontend:1" for item in data)
 
 
 async def _admin_token(client) -> str:
-    response = await client.post("/api/auth/login", json={"email": "admin@demo.com", "password": "admin123"})
+    response = await client.post(
+        "/api/auth/login", json={"email": "admin@demo.com", "password": "admin123"}
+    )
     assert response.status_code == 200
-    return response.json()["access_token"]
+    return response.json()["accessToken"]
 
 
 async def _analyst_token(client) -> str:
-    response = await client.post("/api/auth/login", json={"email": "analyst@demo.com", "password": "analyst123"})
+    response = await client.post(
+        "/api/auth/login", json={"email": "analyst@demo.com", "password": "analyst123"}
+    )
     assert response.status_code == 200
-    return response.json()["access_token"]
+    return response.json()["accessToken"]
 
 
 @pytest.mark.asyncio

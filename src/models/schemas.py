@@ -118,7 +118,16 @@ class EventRead(EventIngest):
 
 
 RawLogEventType = Literal[
-    "logon", "device", "file", "http", "email", "process", "network", "ldap", "psychometric", "custom"
+    "logon",
+    "device",
+    "file",
+    "http",
+    "email",
+    "process",
+    "network",
+    "ldap",
+    "psychometric",
+    "custom",
 ]
 
 
@@ -153,3 +162,69 @@ class RawLogBatchResult(BaseModel):
     created_or_updated: int
     failed: int
     errors: list[dict[str, Any]]
+
+
+# ---------------------------------------------------------------------------
+# Frontend-compatible response models (camelCase to match TypeScript types)
+# ---------------------------------------------------------------------------
+
+
+class FrontendAuthUser(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: Role
+
+
+class FrontendLoginResponse(BaseModel):
+    access_token: str = Field(serialization_alias="accessToken")
+    user: FrontendAuthUser
+
+
+class DashboardSummary(BaseModel):
+    total_users: int = Field(serialization_alias="totalUsers")
+    total_devices: int = Field(serialization_alias="totalDevices")
+    total_logs: int = Field(serialization_alias="totalLogs")
+    open_alerts: int = Field(serialization_alias="openAlerts")
+    high_critical_alerts: int = Field(serialization_alias="highCriticalAlerts")
+    average_risk_score: float = Field(serialization_alias="averageRiskScore")
+    current_model_version: str | None = Field(
+        default=None, serialization_alias="currentModelVersion"
+    )
+    last_import_time: str | None = Field(default=None, serialization_alias="lastImportTime")
+
+
+class FrontendUser(BaseModel):
+    id: str
+    account: str
+    name: str | None = None
+    department: str | None = None
+    role: str | None = None
+    status: str
+    risk_score: int | None = Field(default=None, serialization_alias="riskScore")
+    assigned_devices: int | None = Field(default=None, serialization_alias="assignedDevices")
+    open_alerts: int | None = Field(default=None, serialization_alias="openAlerts")
+    last_seen: str | None = Field(default=None, serialization_alias="lastSeen")
+
+
+class FrontendDevice(BaseModel):
+    id: str
+    hostname: str
+    assigned_user: str | None = Field(default=None, serialization_alias="assignedUser")
+    department: str | None = None
+    status: str
+    risk_score: int | None = Field(default=None, serialization_alias="riskScore")
+    open_alerts: int | None = Field(default=None, serialization_alias="openAlerts")
+    last_seen: str | None = Field(default=None, serialization_alias="lastSeen")
+
+
+class FrontendEventLog(BaseModel):
+    id: str
+    timestamp: str
+    event_type: str = Field(serialization_alias="eventType")
+    user_id: str | None = Field(default=None, serialization_alias="userId")
+    device_id: str | None = Field(default=None, serialization_alias="deviceId")
+    action: str
+    source_file: str | None = Field(default=None, serialization_alias="sourceFile")
+    source_id: str | None = Field(default=None, serialization_alias="sourceId")
+    raw_detail: str | None = Field(default=None, serialization_alias="rawDetail")
