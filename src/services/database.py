@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterable
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -8,6 +9,8 @@ from typing import Any
 
 from src.config import settings
 from src.services.auth import hash_password
+
+logger = logging.getLogger(__name__)
 
 
 def initialize_database() -> None:
@@ -149,6 +152,8 @@ def initialize_database() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_user ON raw_user_logs(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_device ON raw_user_logs(device_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_event_type ON raw_user_logs(event_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_user_logs_collector_type ON raw_user_logs(collector_type)")
+        _ensure_raw_user_logs_event_type_check(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)")
         _seed_accounts(conn)
@@ -426,11 +431,13 @@ def batch_ingest_raw_logs(records: list[dict[str, Any]]) -> dict[str, Any]:
                         now,
                     ),
                 )
+                conn.execute("RELEASE SAVEPOINT sp_raw_batch")
                 created_or_updated += 1
-            except Exception as exc:
+            except Exception:
+                logger.exception("Failed to ingest raw log at index %d", idx)
                 conn.execute("ROLLBACK TO SAVEPOINT sp_raw_batch")
                 failed += 1
-                errors.append({"index": idx, "error": str(exc)})
+                errors.append({"index": idx, "error": "failed_to_ingest_record"})
     return {"created_or_updated": created_or_updated, "failed": failed, "errors": errors}
 
 
@@ -469,6 +476,24 @@ def _decode_raw_log_fields(row: dict[str, Any]) -> dict[str, Any]:
             decoded_key = key.removesuffix("_json")
             row[decoded_key] = json.loads(row.pop(key) or "{}")
     return row
+
+
+_RAW_LOG_EVENT_TYPES = (
+    "logon", "device", "file", "http", "email",
+    "process", "network", "ldap", "psychometric", "custom",
+)
+
+
+def _ensure_raw_user_logs_event_type_check(conn: Any) -> None:
+    constraint_name = "raw_user_logs_event_type_check"
+    row = conn.execute(
+        "SELECT 1 FROM pg_constraint WHERE conname = %s", (constraint_name,)
+    ).fetchone()
+    if row is None:
+        values = ", ".join(f"'{v}'" for v in _RAW_LOG_EVENT_TYPES)
+        conn.execute(
+            f"ALTER TABLE raw_user_logs ADD CONSTRAINT {constraint_name} CHECK (event_type IN ({values}))"
+        )
 
 
 def utc_now() -> str:

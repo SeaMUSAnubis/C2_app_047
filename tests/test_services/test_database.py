@@ -42,6 +42,8 @@ class FakeConnection:
                     "created_at": "2026-06-13T00:00:00Z",
                 }
             )
+        if sql.strip().upper().startswith("SELECT"):
+            return FakeCursor(None)
         return FakeCursor({"count": 0})
 
 
@@ -64,6 +66,8 @@ def test_initialize_database_uses_postgresql_schema(monkeypatch) -> None:
     assert "ON CONFLICT(id) DO NOTHING" in all_sql
     assert "CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp" in all_sql
     assert "CHECK (event_type IN (" in all_sql
+    assert "ALTER TABLE raw_user_logs ADD CONSTRAINT" in all_sql
+    assert "idx_raw_user_logs_collector_type" in all_sql
     assert "AUTOINCREMENT" not in all_sql
     assert "PRAGMA" not in all_sql
 
@@ -298,3 +302,4 @@ def test_batch_ingest_returns_errors_per_record(monkeypatch) -> None:
     assert result["failed"] == 1
     assert len(result["errors"]) == 1
     assert result["errors"][0]["index"] == 1
+    assert result["errors"][0]["error"] == "failed_to_ingest_record"
