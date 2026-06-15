@@ -17,7 +17,9 @@ JWT_ALGORITHM = "HS256"
 
 def hash_password(password: str, *, salt: str | None = None) -> str:
     password_salt = salt or base64.urlsafe_b64encode(os.urandom(16)).decode("ascii")
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), password_salt.encode("utf-8"), 120_000)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), password_salt.encode("utf-8"), 120_000
+    )
     return f"{password_salt}${base64.urlsafe_b64encode(digest).decode('ascii')}"
 
 
@@ -30,7 +32,9 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(candidate, expected_digest)
 
 
-def create_access_token(subject: str, role: str, expires_minutes: int | None = None) -> tuple[str, int]:
+def create_access_token(
+    subject: str, role: str, expires_minutes: int | None = None
+) -> tuple[str, int]:
     expires_in = (expires_minutes or settings.jwt_expires_minutes) * 60
     now = int(time.time())
     header = {"alg": JWT_ALGORITHM, "typ": "JWT"}
@@ -74,7 +78,9 @@ def _b64_decode_json(value: str) -> dict[str, Any]:
 
 
 def _sign(signing_input: str) -> str:
-    digest = hmac.new(settings.jwt_secret.encode("utf-8"), signing_input.encode("ascii"), hashlib.sha256).digest()
+    digest = hmac.new(
+        settings.jwt_secret.encode("utf-8"), signing_input.encode("ascii"), hashlib.sha256
+    ).digest()
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 

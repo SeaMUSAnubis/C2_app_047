@@ -32,7 +32,9 @@ def test_mistral_chat_completion_payload_and_headers(monkeypatch) -> None:
 
     monkeypatch.setattr(settings, "mistral_api_key", "test-mistral-key")
     monkeypatch.setattr(settings, "mistral_model", "mistral-small-latest")
-    monkeypatch.setattr(settings, "mistral_chat_completions_url", "https://api.mistral.ai/v1/chat/completions")
+    monkeypatch.setattr(
+        settings, "mistral_chat_completions_url", "https://api.mistral.ai/v1/chat/completions"
+    )
     monkeypatch.setattr(llm.httpx, "Client", FakeClient)
 
     explanation = llm.explain_alert(

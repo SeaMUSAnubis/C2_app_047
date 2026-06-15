@@ -7,6 +7,7 @@ This file is the working contract between backend and frontend. Endpoint shapes 
 ```text
 POST /api/auth/login
 GET  /api/auth/me
+GET  /api/dashboard/summary
 
 GET  /api/users
 GET  /api/users/{user_id}
@@ -31,9 +32,9 @@ POST /api/models/{model_version}/infer
 GET  /api/models/{model_version}/metrics
 ```
 
-## Implemented in Sprint 3 backend
+## Frontend-compatible contract
 
-Runtime persistence uses PostgreSQL through `DATABASE_URL`; SQLite is not used.
+The following shapes match the TypeScript types in `frontend/src/types/*`.
 
 ### Auth
 
@@ -48,17 +49,15 @@ Request:
 }
 ```
 
-Response:
+Response (camelCase):
 
 ```json
 {
-  "access_token": "<jwt>",
-  "token_type": "bearer",
-  "expires_in": 28800,
+  "accessToken": "<jwt>",
   "user": {
-    "id": 1,
+    "id": "1",
     "email": "admin@demo.com",
-    "full_name": "Demo Admin",
+    "name": "Demo Admin",
     "role": "admin"
   }
 }
@@ -71,102 +70,119 @@ Demo accounts:
 
 `GET /api/auth/me` requires `Authorization: Bearer <jwt>` and returns the current account.
 
+### Dashboard
+
+`GET /api/dashboard/summary` requires a token.
+
+Response (camelCase):
+
+```json
+{
+  "totalUsers": 3,
+  "totalDevices": 3,
+  "totalLogs": 0,
+  "openAlerts": 0,
+  "highCriticalAlerts": 0,
+  "averageRiskScore": 22.3,
+  "currentModelVersion": null,
+  "lastImportTime": null
+}
+```
+
 ### Users
 
-`GET /api/users` requires a token. Query filters:
+`GET /api/users` requires a token. Returns a direct array (no pagination wrapper).
 
-- `department`
-- `job_role`
-- `status`
-- `search`
-- `limit`
-- `offset`
-
-`POST /api/users` and `PATCH /api/users/{user_id}` require role `admin`.
-
-User shape:
+Response item (camelCase):
 
 ```json
 {
   "id": "ACM0001",
-  "username": "acm0001",
-  "full_name": "Alice M. Carter",
-  "email": "alice.carter@example.com",
+  "account": "acm0001",
+  "name": "Alice M. Carter",
   "department": "Finance",
-  "job_role": "Accountant",
+  "role": "Accountant",
   "status": "active",
-  "risk_score": 18,
-  "created_at": "2026-06-13T08:00:00Z",
-  "updated_at": "2026-06-13T08:00:00Z"
+  "riskScore": 18,
+  "assignedDevices": 1,
+  "openAlerts": 0,
+  "lastSeen": "2026-06-13T08:12:00Z"
 }
 ```
 
 ### Devices
 
-`GET /api/devices` requires a token. Query filters:
+`GET /api/devices` requires a token. Returns a direct array (no pagination wrapper).
 
-- `status`
-- `os`
-- `assigned_user_id`
-- `limit`
-- `offset`
-
-`POST /api/devices` and `PATCH /api/devices/{device_id}` require role `admin`.
-
-Device shape:
+Response item (camelCase):
 
 ```json
 {
   "id": "PC-1001",
   "hostname": "FIN-WS-1001",
-  "os": "Windows 11",
-  "ip_address": "10.10.1.21",
-  "assigned_user_id": "ACM0001",
-  "assigned_username": "acm0001",
-  "assigned_user_name": "Alice M. Carter",
-  "status": "online",
-  "risk_score": 12,
-  "last_seen": "2026-06-13T08:12:00Z",
-  "created_at": "2026-06-13T08:00:00Z",
-  "updated_at": "2026-06-13T08:00:00Z"
+  "assignedUser": "acm0001",
+  "department": "Finance",
+  "status": "active",
+  "riskScore": 12,
+  "openAlerts": 0,
+  "lastSeen": "2026-06-13T08:12:00Z"
 }
 ```
+
+Status values: `active` (DB: `online`) or `inactive` (DB: `offline`, `retired`).
 
 ### Logs
 
-`POST /api/logs/ingest` requires a token and upserts by `source_id` to avoid duplicate imports.
+`GET /api/logs` requires a token. Returns a direct array (no pagination wrapper), ordered by timestamp desc, limited to 100 records.
 
-Request:
+Response item (camelCase):
 
 ```json
 {
-  "source_id": "cert-r42:logon:123",
-  "source_file": "logon.csv",
-  "timestamp": "2010-01-04T08:15:00Z",
-  "user_id": "ACM0001",
-  "device_id": "PC-1001",
-  "event_type": "logon",
-  "action": "Logon",
-  "resource": "PC-1001",
-  "metadata": {},
-  "raw": {}
+  "id": "1",
+  "timestamp": "2026-06-13T16:10:00+07:00",
+  "eventType": "logon",
+  "userId": "ACM0001",
+  "deviceId": "PC-1001",
+  "action": "LOGIN_SUCCESS",
+  "sourceFile": "logon.csv",
+  "sourceId": "cert-r42:logon:123",
+  "rawDetail": "Successful logon from FIN-WS-1001"
 }
 ```
 
-`GET /api/logs` requires a token. Query filters:
+## Internal/admin contract
 
-- `user_id`
-- `device_id`
-- `event_type`
-- `limit`
-- `offset`
+The following endpoints retain the original snake_case, paginated shapes for internal/admin use:
+
+- `POST /api/logs/ingest` - event ingest (returns full event record)
+- `POST /api/users`, `PATCH /api/users/{user_id}`, `GET /api/users/{user_id}` - CRUD
+- `POST /api/devices`, `PATCH /api/devices/{device_id}`, `GET /api/devices/{device_id}` - CRUD
+- `POST /api/raw-logs/ingest`, `POST /api/raw-logs/batch`, `GET /api/raw-logs` - raw log management
 
 ## Response conventions
 
 - Use ISO 8601 timestamps.
 - Use stable IDs from backend/database, not frontend-generated IDs.
-- Return pagination metadata for list endpoints.
+- Frontend-facing list endpoints return direct arrays.
+- Admin/internal endpoints may use pagination with `{ items, total, limit, offset }`.
 - Return machine-readable error codes with human-readable messages.
+
+## Environment variables
+
+Backend:
+
+```text
+DATABASE_URL=postgresql://ueba:ueba@localhost:5432/ueba
+JWT_SECRET=change-me-in-production
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+Frontend (`frontend/.env.local`):
+
+```text
+VITE_API_BASE_URL=http://localhost:8000/api
+```
 
 ## LLM Provider
 
