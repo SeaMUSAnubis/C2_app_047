@@ -9,6 +9,7 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.codegraph 
 
 # Virtual environments
 venv/
@@ -44,6 +45,7 @@ AGENTS.md
 *.log
 *.db
 *.sqlite3
+weights/
 
 # Test coverage
 htmlcov/

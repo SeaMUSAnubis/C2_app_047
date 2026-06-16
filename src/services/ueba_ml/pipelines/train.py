@@ -6,7 +6,14 @@ import json
 import os
 import platform
 import time
-from datetime import UTC, datetime
+from datetime import datetime
+
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timedelta, timezone
+
+    UTC = timezone(timedelta(0))
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/c2_app_047_matplotlib")

@@ -129,6 +129,8 @@ RawLogEventType = Literal[
     "psychometric",
     "custom",
 ]
+Severity = Literal["low", "medium", "high", "critical"]
+ModelPrediction = Literal["normal", "anomaly"]
 
 
 class RawLogIngest(BaseModel):
@@ -162,6 +164,40 @@ class RawLogBatchResult(BaseModel):
     created_or_updated: int
     failed: int
     errors: list[dict[str, Any]]
+
+
+class ModelInferRequest(BaseModel):
+    features: dict[str, float]
+    user_id: str | None = None
+    device_id: str | None = None
+
+
+class ModelInferResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    model_version: str = Field(serialization_alias="modelVersion")
+    prediction: ModelPrediction
+    is_anomaly: bool = Field(serialization_alias="isAnomaly")
+    score_samples: float = Field(serialization_alias="scoreSamples")
+    decision_score: float = Field(serialization_alias="decisionScore")
+    anomaly_score: float = Field(serialization_alias="anomalyScore")
+    risk_score: int = Field(serialization_alias="riskScore", ge=0, le=100)
+    severity: Severity
+    feature_columns: list[str] = Field(serialization_alias="featureColumns")
+    missing_features: list[str] = Field(serialization_alias="missingFeatures")
+    extra_features: list[str] = Field(serialization_alias="extraFeatures")
+
+
+class ModelMetricsResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    model_version: str = Field(serialization_alias="modelVersion")
+    algorithm: str
+    kernel: str
+    gamma: str
+    nu: float
+    max_benign_train: int = Field(serialization_alias="maxBenignTrain")
+    feature_columns: list[str] = Field(serialization_alias="featureColumns")
 
 
 # ---------------------------------------------------------------------------
