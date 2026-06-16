@@ -607,8 +607,8 @@ def write_report(
 
 ## Ngữ cảnh đề tài
 
-Các tài liệu đã đọc gồm `docs/PRD.md`, `docs/BRIEF.md`,
-`docs/UEBA_REQUIREMENTS.md`, `data/raw/cert-r4.2/readme.txt` và schema mẫu trong
+Các tài liệu đã đọc gồm `docs/planning/PRD.md`, `docs/planning/BRIEF.md`,
+`docs/planning/UEBA_REQUIREMENTS.md`, `data/raw/cert-r4.2/readme.txt` và schema mẫu trong
 `data/sample/cert-r4.2-small/`. Đề tài là UEBA Endpoint Monitoring cho bài toán insider
 threat/account compromise trên CERT r4.2. Các nguồn tín hiệu bắt buộc gồm
 `logon`, `device`, `file`, `http`, `email`, LDAP snapshots và psychometric
