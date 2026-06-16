@@ -7,6 +7,8 @@ from pydantic import ValidationError
 from src.models.schemas import (
     AccountPublic,
     DashboardSummary,
+    DemoAnalyzeRequest,
+    DemoAnalyzeResponse,
     DeviceCreate,
     DeviceRead,
     DeviceUpdate,
@@ -298,3 +300,15 @@ def _account_public(account: dict) -> AccountPublic:
 
 def _paginated(items: list[dict], total: int, limit: int, offset: int) -> PaginatedResponse:
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post("/demo/analyze", response_model=DemoAnalyzeResponse)
+async def demo_analyze(
+    payload: DemoAnalyzeRequest,
+) -> dict:
+    from src.services.demo_pipeline import demo_pipeline
+
+    result = demo_pipeline.analyze(payload.events, payload.user_id)
+    if "error" in result:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result["error"])
+    return result

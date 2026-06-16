@@ -8,6 +8,7 @@ export const APP_ROUTES = {
   dataImport: '/data-import',
   models: '/models',
   settings: '/settings',
+  demo: '/demo',
 } as const;
 
 export const SIDEBAR_ITEMS = [
@@ -18,5 +19,6 @@ export const SIDEBAR_ITEMS = [
   { label: 'Logs', path: APP_ROUTES.logs },
   { label: 'Data Import', path: APP_ROUTES.dataImport },
   { label: 'ML Models', path: APP_ROUTES.models },
+  { label: 'Demo (AI)', path: APP_ROUTES.demo },
   { label: 'Settings', path: APP_ROUTES.settings },
 ];

@@ -7,6 +7,7 @@ import { UsersPage } from '../pages/UsersPage';
 import { DevicesPage } from '../pages/DevicesPage';
 import { LogsPage } from '../pages/LogsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
+import { DemoPage } from '../pages/DemoPage';
 import { APP_ROUTES } from '../lib/constants';
 
 export function AppRoutes() {
@@ -21,6 +22,7 @@ export function AppRoutes() {
           <Route path={APP_ROUTES.users} element={<UsersPage />} />
           <Route path={APP_ROUTES.devices} element={<DevicesPage />} />
           <Route path={APP_ROUTES.logs} element={<LogsPage />} />
+          <Route path={APP_ROUTES.demo} element={<DemoPage />} />
           <Route path={APP_ROUTES.alerts} element={<PlaceholderPage title="Alerts" />} />
           <Route path={APP_ROUTES.dataImport} element={<PlaceholderPage title="Data Import" />} />
           <Route path={APP_ROUTES.models} element={<PlaceholderPage title="ML Models" />} />
