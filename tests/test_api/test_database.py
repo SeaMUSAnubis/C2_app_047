@@ -213,13 +213,15 @@ async def test_db17_device_fk_constraint() -> None:
 @pytest.mark.asyncio
 @requires_postgres
 async def test_db18_event_log_user_fk() -> None:
-    from src.services.database import get_connection
     import psycopg
+
+    from src.services.database import get_connection
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             try:
                 cur.execute("INSERT INTO event_logs (source_id, source_file, timestamp, user_id, event_type, metadata_json, raw_json, created_at) VALUES ('fk:test:18', 'test.csv', '2026-01-01T00:00:00Z', 'NONEXISTENT', 'logon', '{}', '{}', '2026-01-01T00:00:00Z')")
-                assert False
+                raise AssertionError("Should have raised ForeignKeyViolation")
             except psycopg.errors.ForeignKeyViolation:
                 pass
 

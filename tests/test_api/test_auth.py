@@ -146,8 +146,11 @@ async def test_auth11_forged_token_rejected() -> None:
 
 @pytest.mark.asyncio
 async def test_auth12_token_missing_sub() -> None:
+    import base64
+    import json
+
     from src.services import auth
-    import base64, json
+
     token, _ = auth.create_access_token("1", "admin")
     parts = token.split(".")
     payload_data = {"role": "admin", "iat": int(time.time()), "exp": int(time.time()) + 3600}
@@ -208,7 +211,9 @@ def test_auth18_same_password_different_salt() -> None:
 
 def test_auth19_timing_safe_comparison() -> None:
     import inspect
+
     from src.services import auth
+
     source = inspect.getsource(auth.verify_password)
     assert "compare_digest" in source
 
