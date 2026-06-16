@@ -4,7 +4,14 @@ import json
 import logging
 from collections.abc import Iterable
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import datetime
+
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timedelta, timezone
+
+    UTC = timezone(timedelta(0))
 from typing import Any
 
 from src.config import settings
@@ -172,6 +179,7 @@ def initialize_database() -> None:
             "CREATE INDEX IF NOT EXISTS idx_alerts_device_status ON alerts(device_id, status)"
         )
         _seed_accounts(conn)
+        _seed_model_artifacts(conn)
         _seed_domain_data(conn)
 
 
@@ -706,6 +714,39 @@ def _seed_accounts(conn: Any) -> None:
             """,
             (email, full_name, role, hash_password(password), now),
         )
+
+
+def _seed_model_artifacts(conn: Any) -> None:
+    now = utc_now()
+    training_config = {
+        "source": "pretrained_artifact",
+        "algorithm": "OneClassSVM",
+        "artifact": settings.ocsvm_model_path,
+        "training": "not_run_by_backend",
+    }
+    metrics = {
+        "nu": 0.005,
+        "kernel": "rbf",
+        "gamma": "scale",
+        "max_benign_train": 30000,
+    }
+    conn.execute(
+        """
+        INSERT INTO model_artifacts (model_version, artifact_path, training_config_json, metrics_json, created_at)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT(model_version) DO UPDATE SET
+            artifact_path = excluded.artifact_path,
+            training_config_json = excluded.training_config_json,
+            metrics_json = excluded.metrics_json
+        """,
+        (
+            settings.ocsvm_model_version,
+            settings.ocsvm_model_path,
+            json.dumps(training_config, sort_keys=True),
+            json.dumps(metrics, sort_keys=True),
+            now,
+        ),
+    )
 
 
 def _seed_domain_data(conn: Any) -> None:

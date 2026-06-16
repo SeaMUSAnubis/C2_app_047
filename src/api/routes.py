@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 
+from src.config import settings
 from src.models.schemas import (
     AccountPublic,
     DashboardSummary,
@@ -18,6 +19,9 @@ from src.models.schemas import (
     FrontendUser,
     HealthResponse,
     LoginRequest,
+    ModelInferRequest,
+    ModelInferResponse,
+    ModelMetricsResponse,
     PaginatedResponse,
     RawLogBatchIngest,
     RawLogBatchResult,
@@ -30,6 +34,11 @@ from src.models.schemas import (
 )
 from src.services import database
 from src.services.auth import create_access_token, decode_access_token, verify_password
+from src.services.ueba_ml.inference import (
+    ModelArtifactError,
+    get_ocsvm_metrics,
+    run_ocsvm_inference,
+)
 
 router = APIRouter()
 security = HTTPBearer()
@@ -285,6 +294,66 @@ async def raw_log_detail(
     if not log:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Raw log not found")
     return log
+
+
+@router.post(
+    "/models/{model_version}/infer",
+    response_model=ModelInferResponse,
+    response_model_by_alias=True,
+)
+async def infer_model(
+    model_version: str,
+    payload: ModelInferRequest,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> ModelInferResponse:
+    _ = current_account
+    if model_version != settings.ocsvm_model_version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+    try:
+        return run_ocsvm_inference(payload.features)
+    except ModelArtifactError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/models/{model_version}",
+    response_model=ModelMetricsResponse,
+    response_model_by_alias=True,
+)
+async def model_detail(
+    model_version: str,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> ModelMetricsResponse:
+    _ = current_account
+    return _model_metrics_response(model_version)
+
+
+@router.get(
+    "/models/{model_version}/metrics",
+    response_model=ModelMetricsResponse,
+    response_model_by_alias=True,
+)
+async def model_metrics(
+    model_version: str,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> ModelMetricsResponse:
+    _ = current_account
+    return _model_metrics_response(model_version)
+
+
+def _model_metrics_response(model_version: str) -> ModelMetricsResponse:
+    if model_version != settings.ocsvm_model_version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+    try:
+        return get_ocsvm_metrics()
+    except ModelArtifactError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
 
 
 def _account_public(account: dict) -> AccountPublic:
