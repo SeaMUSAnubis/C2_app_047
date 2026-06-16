@@ -37,4 +37,4 @@ Artifacts + Backend integration
 
 - ML preprocessing and Isolation Forest training are implemented in `src/services/ueba_ml/pipelines/`.
 - FastAPI scaffold is implemented in `src/main.py` and `src/api/routes.py`.
-- Product requirements live in `docs/PRD.md` and `docs/UEBA_REQUIREMENTS.md`.
+- Product requirements live in `docs/planning/PRD.md` and `docs/planning/UEBA_REQUIREMENTS.md`.

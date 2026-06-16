@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD)
 
-**Vị trí chuẩn trong repo:** `docs/PRD.md`  
+**Vị trí chuẩn trong repo:** `docs/planning/PRD.md`  
 **Sản phẩm:** UEBA Endpoint Monitoring  
 **Phiên bản:** 0.1.0 (2-Week MVP)  
 **Ngày:** 09/06/2026  
