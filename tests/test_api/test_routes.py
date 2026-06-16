@@ -225,6 +225,71 @@ async def test_logs_serializes_camel_case(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_model_infer_uses_deployed_ocsvm_artifact(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import settings
+    from src.services.ueba_ml import inference
+
+    _patch_auth(monkeypatch)
+    inference.get_deployed_ocsvm_model.cache_clear()
+
+    async with get_test_client() as client:
+        token = await _mock_admin_token(client)
+        response = await client.post(
+            f"/api/models/{settings.ocsvm_model_version}/infer",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"features": {"logon_count": 4, "email_size_sum": 18400}},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["modelVersion"] == settings.ocsvm_model_version
+    assert data["prediction"] in {"normal", "anomaly"}
+    assert isinstance(data["isAnomaly"], bool)
+    assert 0 <= data["riskScore"] <= 100
+    assert "featureColumns" in data
+    assert "missingFeatures" in data
+
+
+@pytest.mark.asyncio
+async def test_model_infer_rejects_unknown_model_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_auth(monkeypatch)
+
+    async with get_test_client() as client:
+        token = await _mock_admin_token(client)
+        response = await client.post(
+            "/api/models/unknown/infer",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"features": {"logon_count": 4}},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Model not found"
+
+
+@pytest.mark.asyncio
+async def test_model_detail_returns_deployed_ocsvm_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import settings
+    from src.services.ueba_ml import inference
+
+    _patch_auth(monkeypatch)
+    inference.get_deployed_ocsvm_model.cache_clear()
+
+    async with get_test_client() as client:
+        token = await _mock_admin_token(client)
+        response = await client.get(
+            f"/api/models/{settings.ocsvm_model_version}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["modelVersion"] == settings.ocsvm_model_version
+    assert data["algorithm"] == "OneClassSVM"
+    assert data["kernel"] == "rbf"
+    assert len(data["featureColumns"]) == 20
+
+
+@pytest.mark.asyncio
 @requires_postgres
 async def test_login_returns_frontend_compatible_response() -> None:
     async with get_test_client(init_db=True) as client:
