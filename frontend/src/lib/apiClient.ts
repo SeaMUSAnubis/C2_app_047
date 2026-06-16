@@ -85,3 +85,22 @@ export async function getLogs() {
     return mockLogs;
   }
 }
+
+export async function analyzeDemo(payload: any) {
+  if (!API_BASE_URL) {
+    throw new Error('API Base URL is required for demo analysis');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/demo/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Demo analyze failed: ${errorText}`);
+  }
+
+  return response.json();
+}

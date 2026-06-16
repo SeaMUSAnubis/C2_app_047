@@ -1,104 +1,81 @@
-# UEBA Endpoint Monitoring
+# O47 Insider Threat Detection System
 
-UEBA Endpoint Monitoring là web app phát hiện hành vi bất thường của user/device từ log endpoint theo hướng insider threat và account compromise. MVP dùng CERT r4.2-style logs để preprocessing, train Isolation Forest, sinh anomaly score/risk context và chuẩn bị tích hợp dashboard + backend API + endpoint agent.
+Hệ thống phân tích hành vi người dùng và phân tích rủi ro nội bộ (UEBA - User and Entity Behavior Analytics) kết hợp giữa Machine Learning (OCSVM) và Large Language Models (LLMs) để đưa ra giải thích thân thiện cho chuyên gia bảo mật.
 
-## Cấu trúc repo
+## 1. Architecture Diagram
+Xem sơ đồ kiến trúc tại file [Architecture Diagram](./artifacts/architecture_diagram.md).
 
-```text
-src/
-  agents/       Agent graph, nodes, tools, state theo starter template
-  api/          FastAPI routes
-  models/       Pydantic schemas
-  services/     Business logic và UEBA ML pipelines
-tests/          pytest suite
-docs/           PRD, architecture, API/data contract, references, guide
-eval/           Evaluation evidence và reports
-presentation/   Demo Day slides/assets
-scripts/        AI logging hooks và helper scripts
-.github/        CI/CD workflows + Copilot hook config
-Dockerfile      API container
-docker-compose.yml
-Makefile
-```
+## 2. Setup Instructions
 
-Chi tiết chuẩn thư mục nằm ở [docs/standards/REPO_STRUCTURE_STANDARD.md](docs/standards/REPO_STRUCTURE_STANDARD.md).
+### Yêu cầu hệ thống
+- Python 3.10+
+- Node.js 18+
+- Dữ liệu CERT r4.2 đặt tại `d:\2 Code\TEAM_O47\Data`
+- Model weight đặt tại `d:\2 Code\TEAM_O47\Weight`
 
-## Data
-
-Repo tách dữ liệu theo vòng đời:
-
-- `data/raw/cert-r4.2/`: raw CERT dataset, local only, không commit.
-- `data/sample/cert-r4.2-small/`: sample nhỏ để smoke test/demo nhanh, local only.
-- `artifacts/`: feature matrix, model binary, scores, local/generated.
-- Schema và data contract nằm trong `docs/contracts/DATA_CONTRACT.md`.
-
-## ML pipeline hiện có
-
-Chạy preprocessing trên sample:
-
+### Cài đặt Backend
 ```bash
-python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/sample/cert-r4.2-small
+# 1. Chuyển vào thư mục dự án
+cd "d:\2 Code\TEAM_O47\C2-App-047"
+
+# 2. Tạo môi trường ảo (nếu chưa có) và cài đặt dependencies
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. Khởi chạy FastAPI server
+uvicorn src.main:app --reload --port 8000
 ```
 
-Chạy preprocessing trên raw dataset:
-
+### Cài đặt Frontend
 ```bash
-python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/raw/cert-r4.2 --chunksize 250000
+# 1. Chuyển vào thư mục frontend
+cd "d:\2 Code\TEAM_O47\C2-App-047\frontend"
+
+# 2. Cài đặt các gói thư viện
+npm install
+
+# 3. Chạy Vite dev server
+npm run dev
 ```
 
-Train Isolation Forest từ feature matrix:
+## 3. Environment Variables (Env Vars)
 
-```bash
-python src/services/ueba_ml/pipelines/train.py
+### Backend `.env`
+Tạo file `.env` tại thư mục gốc backend:
+```env
+APP_NAME="O47 UEBA System"
+APP_VERSION="1.0.0"
+CORS_ORIGINS="http://localhost:5173"
+JWT_SECRET="your-secret-key-here"
 ```
 
-Output chính:
-
-- `artifacts/preprocessing/iforest_feature_matrix.csv`
-- `artifacts/preprocessing/iforest_feature_columns.json`
-- `artifacts/models/iforest_model.joblib`
-- `artifacts/models/iforest_metadata.json`
-- `artifacts/models/iforest_anomaly_scores.csv`
-- `artifacts/evaluation/iforest_feature_lift.csv`
-- `eval/results/preprocessing_report.md`
-- `eval/results/iforest_training_report.md`
-
-## Module ownership
-
-| Mảng | Thư mục | Deliverable |
-|---|---|---|
-| Product/PM | `docs/`, `docs/management/JOURNAL.md`, `docs/management/WORKLOG.md` | PRD, user story, task assignment |
-| API/backend | `src/api/`, `src/models/`, `src/main.py` | FastAPI app, schemas, service API |
-| Data/ML | `src/services/ueba_ml/`, `data/`, `artifacts/`, `eval/` | Feature pipeline, model training, scoring, reports |
-| Agent/LLM workflow | `src/agents/`, `src/services/` | Alert explanation workflow and services |
-| QA/DevOps | `tests/`, `.github/`, `Dockerfile`, `Makefile` | CI, tests, deploy config |
-
-## AI logging hooks
-
-Repo vẫn giữ hook logging của AI20K Build Cohort 2 trong `scripts/` và các thư mục `.agents/`, `.claude/`, `.codex/`, `.cursor/`, `.gemini/`, `.github/hooks/`.
-
-Cài pre-push hook một lần:
-
-```bash
-bash scripts/setup_hooks.sh
+### Frontend `.env`
+Tạo file `.env` tại thư mục `frontend`:
+```env
+VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
-Hoặc trên Windows PowerShell:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1
+## 4. Sample Queries
+Ví dụ payload JSON gửi tới endpoint `/api/demo/analyze`:
+```json
+{
+  "user_id": "HSB0196",
+  "events": [
+    {
+      "event_type": "logon",
+      "timestamp": "2010-01-02T09:00:00Z",
+      "pc": "PC-8001"
+    },
+    {
+      "event_type": "file",
+      "timestamp": "2010-01-02T09:49:30Z",
+      "filename": "RJGC8XX5.exe"
+    }
+  ]
+}
 ```
 
-Với ChatGPT/web tools, log thủ công:
-
-```bash
-bash scripts/_pyrun.sh scripts/log_manual.py --tool chatgpt --prompt "<what you did>"
-```
-
-## Tài liệu
-
-- [docs/planning/BRIEF.md](docs/planning/BRIEF.md)
-- [docs/planning/PRD.md](docs/planning/PRD.md)
-- [docs/planning/UEBA_REQUIREMENTS.md](docs/planning/UEBA_REQUIREMENTS.md)
-- [docs/standards/REPO_STRUCTURE_STANDARD.md](docs/standards/REPO_STRUCTURE_STANDARD.md)
-- [docs/assets/UI_FLOW.svg](docs/assets/UI_FLOW.svg)
+## 5. Eval Evidences
+Bạn có thể tham khảo kết quả phân tích 5 kịch bản thực tế (lấy từ log của tập CERT) tại báo cáo [Eval Evidences](./artifacts/eval_evidences.md).
+Mọi cảnh báo đều được Model nhận diện dựa trên baseline của user, từ đó LLM sẽ tổng hợp ra một câu giải thích bằng ngôn ngữ tự nhiên.
