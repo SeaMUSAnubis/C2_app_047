@@ -27,7 +27,7 @@ GET  /api/alerts
 GET  /api/alerts/{alert_id}
 PATCH /api/alerts/{alert_id}
 
-POST /api/models/train
+GET  /api/models/{model_version}
 POST /api/models/{model_version}/infer
 GET  /api/models/{model_version}/metrics
 ```
@@ -160,6 +160,64 @@ The following endpoints retain the original snake_case, paginated shapes for int
 - `POST /api/devices`, `PATCH /api/devices/{device_id}`, `GET /api/devices/{device_id}` - CRUD
 - `POST /api/raw-logs/ingest`, `POST /api/raw-logs/batch`, `GET /api/raw-logs` - raw log management
 
+### Deployed OCSVM model
+
+The backend does not train a model at runtime. It loads the pre-trained OCSVM
+artifact from `weights/ocsvm_cert_r42_chunked.joblib`.
+
+`GET /api/models/ocsvm-cert-r42-chunked` requires a token and returns the deployed model metadata.
+
+`POST /api/models/ocsvm-cert-r42-chunked/infer` requires a token.
+
+Request:
+
+```json
+{
+  "features": {
+    "logon_count": 4,
+    "logon_after_hours_count": 1,
+    "logon_activity_Logoff_count": 2,
+    "logon_activity_Logon_count": 2,
+    "device_count": 1,
+    "device_after_hours_count": 0,
+    "device_activity_Connect_count": 1,
+    "device_activity_Disconnect_count": 0,
+    "file_count": 12,
+    "file_after_hours_count": 1,
+    "email_count": 3,
+    "email_after_hours_count": 0,
+    "email_size_sum": 18400,
+    "email_size_mean": 6133.33,
+    "email_size_max": 12000,
+    "email_attachments_sum": 1,
+    "email_attachments_mean": 0.33,
+    "email_attachments_max": 1,
+    "http_count": 24,
+    "http_after_hours_count": 2
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "modelVersion": "ocsvm-cert-r42-chunked",
+  "prediction": "anomaly",
+  "isAnomaly": true,
+  "scoreSamples": 0.65,
+  "decisionScore": -0.32,
+  "anomalyScore": -0.65,
+  "riskScore": 73,
+  "severity": "high",
+  "featureColumns": ["logon_count"],
+  "missingFeatures": [],
+  "extraFeatures": []
+}
+```
+
+Missing model features are filled with `0.0`; extra submitted features are ignored and reported.
+
 ## Response conventions
 
 - Use ISO 8601 timestamps.
@@ -176,6 +234,8 @@ Backend:
 DATABASE_URL=postgresql://ueba:ueba@localhost:5432/ueba
 JWT_SECRET=change-me-in-production
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+OCSVM_MODEL_PATH=weights/ocsvm_cert_r42_chunked.joblib
+OCSVM_MODEL_VERSION=ocsvm-cert-r42-chunked
 ```
 
 Frontend (`frontend/.env.local`):
