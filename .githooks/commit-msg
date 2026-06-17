@@ -1,0 +1,35 @@
+#!/bin/sh
+
+MSG_FILE="$1"
+MSG="$(cat "$MSG_FILE")"
+
+# Bỏ qua merge/revert commit
+echo "$MSG" | grep -Eq "^(Merge|Revert)" && exit 0
+
+# Chặn message chung chung
+if echo "$MSG" | grep -Eiq "^(auto update|update files|fix bugs|changes|update|chore\(agent\): auto update|chore: update)$"; then
+  echo "❌ Commit message quá chung chung: $MSG"
+  echo ""
+  echo "Dùng format rõ ràng kiểu:"
+  echo "  feat(backend): add log ingestion endpoint"
+  echo "  fix(frontend): handle empty anomaly state"
+  echo "  test(backend): add risk scoring tests"
+  echo "  docs(readme): update setup guide"
+  exit 1
+fi
+
+# Bắt buộc Conventional Commit
+if ! echo "$MSG" | grep -Eq "^(feat|fix|docs|test|refactor|chore|ci|style|perf|build|revert)(\([a-zA-Z0-9_-]+\))?: .{8,}$"; then
+  echo "❌ Commit message không đúng format Conventional Commit."
+  echo ""
+  echo "Format:"
+  echo "  type(scope): short description"
+  echo ""
+  echo "Ví dụ:"
+  echo "  feat(backend): add log ingestion endpoint"
+  echo "  fix(frontend): handle empty anomaly state"
+  echo "  chore(config): add commit message hook"
+  exit 1
+fi
+
+exit 0
