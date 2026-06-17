@@ -180,7 +180,7 @@ def initialize_database() -> None:
         )
         _seed_accounts(conn)
         _seed_model_artifacts(conn)
-        _seed_domain_data(conn)
+        # _seed_domain_data(conn)  # Removed mock data so only CSV data shows
 
 
 @contextmanager
@@ -861,6 +861,66 @@ def _decode_raw_log_fields(row: dict[str, Any]) -> dict[str, Any]:
             decoded_key = key.removesuffix("_json")
             row[decoded_key] = json.loads(row.pop(key) or "{}")
     return row
+
+def create_alert(payload: dict[str, Any]) -> dict[str, Any]:
+    now = utc_now()
+    risk_factors_json = json.dumps(payload.get("risk_factors") or [])
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO alerts (
+                user_id, device_id, event_log_id, model_version, title, severity, status,
+                risk_score, anomaly_score, risk_factors_json, explanation, detected_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (
+                payload.get("user_id"),
+                payload.get("device_id"),
+                payload.get("event_log_id"),
+                payload.get("model_version"),
+                payload["title"],
+                payload.get("severity", "medium"),
+                payload.get("status", "new"),
+                payload["risk_score"],
+                payload.get("anomaly_score"),
+                risk_factors_json,
+                payload.get("explanation"),
+                now,
+                now,
+            )
+        ).fetchone()
+        return _row_to_dict(row) or {}
+
+def list_frontend_alerts(limit: int = 100) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            a.id::TEXT AS id,
+            a.title,
+            a.severity,
+            a.status,
+            a.risk_score AS "riskScore",
+            a.anomaly_score AS "anomalyScore",
+            a.risk_factors_json AS "riskFactorsJson",
+            a.explanation,
+            a.detected_at AS "detectedAt",
+            u.username AS "userName",
+            d.hostname AS "deviceName"
+        FROM alerts a
+        LEFT JOIN users u ON u.id = a.user_id
+        LEFT JOIN devices d ON d.id = a.device_id
+        ORDER BY a.risk_score DESC, a.detected_at DESC
+        LIMIT %s
+    """
+    with get_connection() as conn:
+        rows = conn.execute(sql, (limit,)).fetchall()
+        result = []
+        for row in rows:
+            r = _row_to_dict(row) or {}
+            r["riskFactors"] = json.loads(r.pop("riskFactorsJson") or "[]")
+            result.append(r)
+        return result
 
 
 _RAW_LOG_EVENT_TYPES = (

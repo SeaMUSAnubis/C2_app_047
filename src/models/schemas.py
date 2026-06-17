@@ -459,3 +459,16 @@ class FrontendEventLog(BaseModel):
         validation_alias=AliasChoices("rawDetail", "raw_detail"),
         serialization_alias="rawDetail",
     )
+
+
+class DemoAnalyzeRequest(BaseModel):
+    user_id: str
+    events: list[dict[str, Any]]
+
+
+class DemoAnalyzeResponse(BaseModel):
+    is_anomaly: bool
+    anomaly_score: float
+    risk_score: int
+    top_factors: list[str]
+    explanation: str

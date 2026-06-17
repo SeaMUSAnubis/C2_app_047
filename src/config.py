@@ -15,10 +15,11 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(default="change-me-in-production", alias="JWT_SECRET")
     jwt_expires_minutes: int = Field(default=60 * 8, alias="JWT_EXPIRES_MINUTES")
     mistral_api_key: str = Field(default="", alias="MISTRAL_API_KEY")
-    mistral_model: str = Field(default="mistral-small-latest", alias="MISTRAL_MODEL")
-    mistral_chat_completions_url: str = Field(
-        default="https://api.mistral.ai/v1/chat/completions",
-        alias="MISTRAL_CHAT_COMPLETIONS_URL",
+    openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    openrouter_model: str = Field(default="openrouter/free", alias="OPENROUTER_MODEL")
+    openrouter_chat_completions_url: str = Field(
+        default="https://openrouter.ai/api/v1/chat/completions",
+        alias="OPENROUTER_CHAT_COMPLETIONS_URL",
     )
     ocsvm_model_path: str = Field(
         default="weights/ocsvm_cert_r42_chunked.joblib",
