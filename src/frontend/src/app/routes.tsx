@@ -7,7 +7,9 @@ import { UsersPage } from '../pages/UsersPage';
 import { DevicesPage } from '../pages/DevicesPage';
 import { LogsPage } from '../pages/LogsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
-import { DemoPage } from '../pages/DemoPage';
+import { AlertsPage } from '../pages/AlertsPage';
+import { DataImportPage } from '../pages/DataImportPage';
+import { ModelsPage } from '../pages/ModelsPage';
 import { APP_ROUTES } from '../lib/constants';
 
 export function AppRoutes() {
@@ -22,10 +24,9 @@ export function AppRoutes() {
           <Route path={APP_ROUTES.users} element={<UsersPage />} />
           <Route path={APP_ROUTES.devices} element={<DevicesPage />} />
           <Route path={APP_ROUTES.logs} element={<LogsPage />} />
-          <Route path={APP_ROUTES.demo} element={<DemoPage />} />
-          <Route path={APP_ROUTES.alerts} element={<PlaceholderPage title="Alerts" />} />
-          <Route path={APP_ROUTES.dataImport} element={<PlaceholderPage title="Data Import" />} />
-          <Route path={APP_ROUTES.models} element={<PlaceholderPage title="ML Models" />} />
+          <Route path={APP_ROUTES.alerts} element={<AlertsPage />} />
+          <Route path={APP_ROUTES.dataImport} element={<DataImportPage />} />
+          <Route path={APP_ROUTES.models} element={<ModelsPage />} />
           <Route path={APP_ROUTES.settings} element={<PlaceholderPage title="Settings" />} />
         </Route>
       </Route>

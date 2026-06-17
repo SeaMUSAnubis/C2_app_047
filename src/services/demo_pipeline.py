@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import os
 from typing import Any
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
+
+warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
 
 import joblib
 import pandas as pd
 
 from src.services.llm import explain_alert
 
-MODEL_PATH = r"d:\2 Code\TEAM_O47\Weight\ocsvm_cert_r42_chunked.joblib"
+MODEL_PATH = os.getenv("MODEL_PATH", r"d:\2 Code\TEAM_O47\Weight\ocsvm_cert_r42_chunked.joblib")
 
 class DemoPipeline:
     def __init__(self):
@@ -40,6 +44,9 @@ class DemoPipeline:
         """
         Simplify the logic of extract_features.py for a demo batch of events.
         """
+        if not events:
+            return pd.DataFrame()
+
         df = pd.DataFrame(events)
         if df.empty:
             return pd.DataFrame()
@@ -115,7 +122,18 @@ class DemoPipeline:
     def analyze(self, events: list[dict[str, Any]], user_id: str) -> dict[str, Any]:
         if not self.model:
             return {"error": "Model is not loaded on server."}
-            
+
+        # Flatten 'raw' into top-level for easier processing
+        flattened_events = []
+        for e in events:
+            flat_e = dict(e)
+            if "raw" in flat_e and isinstance(flat_e["raw"], dict):
+                for k, v in flat_e["raw"].items():
+                    if k not in flat_e:
+                        flat_e[k] = v
+            flattened_events.append(flat_e)
+
+        events = flattened_events
         features_df = self.extract_features(events)
         if features_df.empty:
             return {"error": "No valid features could be extracted."}
@@ -174,5 +192,39 @@ class DemoPipeline:
             "top_factors": top_factors,
             "explanation": explanation
         }
+
+def load_user_events_from_demo_csv(user_id: str) -> list[dict[str, Any]]:
+    import os
+    import pandas as pd
+    data_dir = os.getenv("DATA_DIR", r"d:\2 Code\TEAM_O47\Data\data_demo")
+    events = []
+    
+    csv_types = {
+        "logon.csv": "logon",
+        "device.csv": "device",
+        "http.csv": "http",
+        "email.csv": "email",
+        "file.csv": "file"
+    }
+    
+    for filename, event_type in csv_types.items():
+        filepath = os.path.join(data_dir, filename)
+        if not os.path.exists(filepath):
+            continue
+        try:
+            df = pd.read_csv(filepath)
+            # Filter by user
+            if "user" in df.columns:
+                user_df = df[df["user"] == user_id].copy()
+                if not user_df.empty:
+                    user_df["event_type"] = event_type
+                    # Convert date to timestamp for timeline mapping
+                    if "date" in user_df.columns:
+                        user_df["timestamp"] = user_df["date"]
+                    events.extend(user_df.to_dict("records"))
+        except Exception as e:
+            print(f"Error reading {filename}: {e}")
+            
+    return events
 
 demo_pipeline = DemoPipeline()

@@ -1,10 +1,4 @@
 import { getAccessToken } from './authStore';
-import {
-  mockDashboardSummary,
-  mockDevices,
-  mockLogs,
-  mockUsers,
-} from './mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -55,35 +49,19 @@ export async function login(email: string, password: string) {
 }
 
 export async function getDashboardSummary() {
-  try {
-    return await request('/dashboard/summary');
-  } catch {
-    return mockDashboardSummary;
-  }
+  return await request('/dashboard/summary');
 }
 
 export async function getUsers() {
-  try {
-    return await request('/users');
-  } catch {
-    return mockUsers;
-  }
+  return await request('/users');
 }
 
 export async function getDevices() {
-  try {
-    return await request('/devices');
-  } catch {
-    return mockDevices;
-  }
+  return await request('/devices');
 }
 
 export async function getLogs() {
-  try {
-    return await request('/logs');
-  } catch {
-    return mockLogs;
-  }
+  return await request('/logs');
 }
 
 export async function analyzeDemo(payload: any) {
@@ -102,5 +80,27 @@ export async function analyzeDemo(payload: any) {
     throw new Error(`Demo analyze failed: ${errorText}`);
   }
 
+  return response.json();
+}
+
+export async function getAlerts() {
+  try {
+    return await request<any[]>('/alerts');
+  } catch {
+    return [];
+  }
+}
+
+export async function importDemoData() {
+  const response = await fetch(`${API_BASE_URL}/datasets/cert-r42/import`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getAccessToken()}`
+    }
+  });
+  if (!response.ok) {
+    throw new Error('Import failed');
+  }
   return response.json();
 }

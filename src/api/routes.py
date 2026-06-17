@@ -218,6 +218,14 @@ async def logs(
     return database.list_frontend_logs()
 
 
+@router.get("/alerts")
+async def alerts(
+    current_account: Annotated[dict, Depends(get_current_account)],
+) -> list[dict[str, Any]]:
+    _ = current_account
+    return database.list_frontend_alerts()
+
+
 @router.post("/raw-logs/ingest", response_model=RawLogRead, status_code=status.HTTP_201_CREATED)
 async def ingest_raw_log(
     payload: RawLogIngest,
@@ -307,8 +315,63 @@ async def demo_analyze(
     payload: DemoAnalyzeRequest,
 ) -> dict:
     from src.services.demo_pipeline import demo_pipeline
+    from src.services.database import list_events
 
-    result = demo_pipeline.analyze(payload.events, payload.user_id)
+    events = payload.events
+    if not events and payload.user_id:
+        from src.services.demo_pipeline import load_user_events_from_demo_csv
+        csv_events = load_user_events_from_demo_csv(payload.user_id)
+        if csv_events:
+            events = csv_events
+        else:
+            db_events = list_events({"user_id": payload.user_id})
+            events = db_events
+
+    result = demo_pipeline.analyze(events, payload.user_id)
     if "error" in result:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result["error"])
+        
+    if result.get("is_anomaly"):
+        from src.services.database import create_alert
+        top_factors = result.get("top_factors", [])
+        risk_score = result.get("risk_score", 0)
+        
+        if top_factors:
+            title = f"Suspicious Behavior: {', '.join(top_factors)}"
+        else:
+            title = "Suspicious Behavior Detected"
+            
+        alert_payload = {
+            "user_id": payload.user_id,
+            "title": title,
+            "risk_score": risk_score,
+            "anomaly_score": result.get("anomaly_score"),
+            "risk_factors": top_factors,
+            "explanation": result.get("explanation"),
+            "severity": "high" if risk_score > 70 else "medium",
+            "status": "new"
+        }
+        try:
+            create_alert(alert_payload)
+        except Exception as e:
+            # Prevent crashing if DB insert fails
+            print(f"Failed to create alert: {e}")
+
     return result
+
+@router.post("/datasets/cert-r42/import")
+async def import_demo_data(
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> dict:
+    _ = current_account
+    try:
+        from src.scripts.seed_mock_data import main as seed_main
+        stats = seed_main()
+        return {
+            "job_id": "import_demo_001",
+            "status": "completed",
+            "summary": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+

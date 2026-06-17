@@ -10,41 +10,59 @@ SYSTEM_PROMPT = (
     "You are a SOC analyst assistant for a UEBA endpoint monitoring product. "
     "Explain anomaly alerts using only the provided context. "
     "Be concise, factual, and include likely risk factors and recommended next step. "
-    "Do not invent evidence that is not in the context."
+    "Do not invent evidence that is not in the context. "
+    "IMPORTANT: You MUST write your analysis and response entirely in Vietnamese."
 )
 
 
 def explain_alert(context: dict[str, Any]) -> str:
     fallback = _fallback_explanation(context)
-    if not settings.mistral_api_key:
+    if not settings.openrouter_api_key:
+        print("LLM Fallback: OPENROUTER_API_KEY is not set.")
         return fallback
 
     try:
-        explanation = _call_mistral(context)
-    except (httpx.HTTPError, KeyError, TypeError, ValueError):
-        return fallback
+        explanation = _call_openrouter(context)
+    except Exception as e:
+        print(f"LLM Fallback triggered due to error: {e}")
+        return f"❌ Lỗi khi gọi AI: {str(e)}"
     return explanation or fallback
 
 
-def _call_mistral(context: dict[str, Any]) -> str:
+def _call_openrouter(context: dict[str, Any]) -> str:
     payload = {
-        "model": settings.mistral_model,
+        "model": settings.openrouter_model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": _format_alert_context(context)},
         ],
         "temperature": 0.2,
-        "max_tokens": 350,
-        "response_format": {"type": "text"},
+        "max_tokens": 500,
     }
     headers = {
-        "Authorization": f"Bearer {settings.mistral_api_key}",
+        "Authorization": f"Bearer {settings.openrouter_api_key}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5173", # Optional for OpenRouter
+        "X-Title": "Vespionage UEBA", # Optional for OpenRouter
     }
-    with httpx.Client(timeout=20) as client:
-        response = client.post(settings.mistral_chat_completions_url, headers=headers, json=payload)
+    with httpx.Client(timeout=30) as client:
+        response = client.post(settings.openrouter_chat_completions_url, headers=headers, json=payload)
+        
+        try:
+            data = response.json()
+        except:
+            data = {}
+
+        if "error" in data:
+            error_msg = data["error"].get("message", "Unknown error")
+            print("OpenRouter Error:", error_msg)
+            return f"Lỗi từ LLMs: {error_msg}. Vui lòng thử lại sau."
+            
         response.raise_for_status()
-        data = response.json()
+
+        if "choices" not in data:
+            print("ERROR: OpenRouter response missing 'choices':", response.text)
+            raise KeyError("choices")
     return data["choices"][0]["message"]["content"].strip()
 
 
