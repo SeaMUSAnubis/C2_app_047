@@ -30,5 +30,24 @@ services:
       - ./data:/app/data
       - ./artifacts:/app/artifacts
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      # Browser chạy trên host nên gọi API qua cổng 8000 đã map ra host.
+      VITE_API_BASE_URL: http://localhost:8000/api
+      # Bật polling cho Vite watcher để hot-reload hoạt động qua bind-mount.
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume giữ node_modules của container (musl/alpine),
+      # tránh bị node_modules của host ghi đè qua bind-mount ở trên.
+      - /app/node_modules
+    depends_on:
+      - api
+
 volumes:
   postgres_data:
