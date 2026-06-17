@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
-import { ShieldAlert, Activity, ChevronRight, CheckCircle, Clock } from 'lucide-react';
+import { ShieldAlert, Activity, CheckCircle, Clock } from 'lucide-react';
 import '../styles/alerts.css';
 import { getAlerts } from '../lib/apiClient';
 

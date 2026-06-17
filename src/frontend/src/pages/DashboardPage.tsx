@@ -9,7 +9,7 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
 
   useEffect(() => {
-    getDashboardSummary().then(setSummary);
+    getDashboardSummary().then(data => setSummary(data as DashboardSummary));
   }, []);
 
   if (!summary) return <LoadingState message="Loading dashboard..." />;
