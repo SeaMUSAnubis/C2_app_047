@@ -29,6 +29,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./artifacts:/app/artifacts
+      - ./weights:/app/weights
 
 volumes:
   postgres_data:
