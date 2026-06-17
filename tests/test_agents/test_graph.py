@@ -7,10 +7,10 @@ def test_explanation_graph_returns_explanation() -> None:
     assert "explanation" in state
 
 
-def test_explanation_graph_uses_rule_fallback_without_mistral_key(monkeypatch) -> None:
+def test_explanation_graph_uses_rule_fallback_without_openrouter_key(monkeypatch) -> None:
     from src.config import settings
 
-    monkeypatch.setattr(settings, "mistral_api_key", "")
+    monkeypatch.setattr(settings, "openrouter_api_key", "")
 
     state = run_explanation_graph(
         {
@@ -27,20 +27,20 @@ def test_explanation_graph_uses_rule_fallback_without_mistral_key(monkeypatch) -
     assert "after_hours_logon" in state["explanation"]
 
 
-def test_explanation_graph_calls_mistral_when_key_is_configured(monkeypatch) -> None:
+def test_explanation_graph_calls_openrouter_when_key_is_configured(monkeypatch) -> None:
     from src.config import settings
     from src.services import llm
 
     seen = {}
 
-    def fake_call_mistral(context):
+    def fake_call_openrouter(context):
         seen["context"] = context
-        return "Mistral explanation"
+        return "OpenRouter explanation"
 
-    monkeypatch.setattr(settings, "mistral_api_key", "test-key")
-    monkeypatch.setattr(llm, "_call_mistral", fake_call_mistral)
+    monkeypatch.setattr(settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(llm, "_call_openrouter", fake_call_openrouter)
 
     state = run_explanation_graph({"context": {"alert_id": "A-2", "risk_score": 64}})
 
-    assert state["explanation"] == "Mistral explanation"
+    assert state["explanation"] == "OpenRouter explanation"
     assert seen["context"]["alert_id"] == "A-2"
