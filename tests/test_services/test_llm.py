@@ -65,7 +65,7 @@ def test_openrouter_chat_completion_payload_and_headers(monkeypatch) -> None:
     assert "after_hours_logon" in seen["payload"]["messages"][1]["content"]
 
 
-def test_openrouter_http_error_returns_rule_based_fallback(monkeypatch) -> None:
+def test_openrouter_http_error_returns_error_message(monkeypatch) -> None:
     def raise_http_error(context):
         raise httpx.HTTPError("openrouter unavailable")
 
@@ -81,8 +81,8 @@ def test_openrouter_http_error_returns_rule_based_fallback(monkeypatch) -> None:
         }
     )
 
-    assert "Alert A-99 is classified as critical" in explanation
-    assert "bulk_file_copy" in explanation
+    assert "Lỗi khi gọi AI" in explanation
+    assert "openrouter unavailable" in explanation
 
 
 def test_openrouter_missing_key_returns_rule_based_fallback(monkeypatch) -> None:
