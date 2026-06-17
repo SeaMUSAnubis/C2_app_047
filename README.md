@@ -2,80 +2,50 @@
 
 Hệ thống phân tích hành vi người dùng và phân tích rủi ro nội bộ (UEBA - User and Entity Behavior Analytics) kết hợp giữa Machine Learning (OCSVM) và Large Language Models (LLMs) để đưa ra giải thích thân thiện cho chuyên gia bảo mật.
 
-## 1. Architecture Diagram
-Xem sơ đồ kiến trúc tại file [Architecture Diagram](./artifacts/architecture_diagram.md).
+## Cấu trúc repo
 
-## 2. Setup Instructions
+```text
+C2-App-047/
+├── src/                          # Backend + Frontend source code
+│   ├── main.py                   # FastAPI app entry point
+│   ├── config.py                 # App settings
+│   ├── api/                      # FastAPI routes
+│   │   └── routes.py             # All API endpoints
+│   ├── models/                   # Pydantic schemas
+│   │   └── schemas.py            # Request/response models
+│   ├── services/                 # Business logic
+│   │   ├── auth.py               # JWT auth
+│   │   ├── database.py           # PostgreSQL CRUD
+│   │   ├── llm.py                # LLM integration
+│   │   └── ueba_ml/              # ML pipelines
+│   │       ├── inference.py      # OCSVM inference
+│   │       └── pipelines/        # Preprocessing, training
+│   └── frontend/                 # React + Vite frontend
+│       ├── src/                  # React source
+│       ├── package.json          # Node dependencies
+│       ├── Dockerfile            # Frontend Docker image
+│       └── nginx.conf            # Nginx proxy config
+│
+├── tests/                        # pytest test suite
+├── docs/                         # Documentation
+├── scripts/                      # Helper scripts
+├── weights/                      # ML model artifacts
+├── data/                         # Local data (không commit)
+├── artifacts/                    # ML outputs (không commit)
+│
+├── docker-compose.yml            # Docker services
+├── Dockerfile                    # Backend Docker image
+├── Makefile                      # Common commands
+├── requirements.txt              # Python dependencies
+└── .env.example                  # Environment variables template
+```
+
+## Setup Instructions
 
 ### Yêu cầu hệ thống
 - Python 3.10+
-- Node.js 18+
-- Dữ liệu CERT r4.2 đặt tại `d:\2 Code\TEAM_O47\Data`
-- Model weight đặt tại `d:\2 Code\TEAM_O47\Weight`
-
-### Cài đặt Backend
-```bash
-# 1. Chuyển vào thư mục dự án
-cd "d:\2 Code\TEAM_O47\C2-App-047"
-
-# 2. Tạo môi trường ảo (nếu chưa có) và cài đặt dependencies
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-
-# 3. Khởi chạy FastAPI server
-uvicorn src.main:app --reload --port 8000
-```
-
-### Cài đặt Frontend
-```bash
-# 1. Chuyển vào thư mục frontend
-cd "d:\2 Code\TEAM_O47\C2-App-047\frontend"
-
-# 2. Cài đặt các gói thư viện
-npm install
-
-# 3. Chạy Vite dev server
-npm run dev
-```
-
-## 3. Environment Variables (Env Vars)
-
-### Backend `.env`
-Tạo file `.env` tại thư mục gốc backend:
-```env
-APP_NAME="O47 UEBA System"
-APP_VERSION="1.0.0"
-CORS_ORIGINS="http://localhost:5173"
-JWT_SECRET="your-secret-key-here"
-```
-
-### Frontend `.env`
-Tạo file `.env` tại thư mục `frontend`:
-```env
-VITE_API_BASE_URL=http://localhost:8000/api
-```
-
-Output chính:
-
-- `artifacts/preprocessing/iforest_feature_matrix.csv`
-- `artifacts/preprocessing/iforest_feature_columns.json`
-- `artifacts/models/iforest_model.joblib`
-- `artifacts/models/iforest_metadata.json`
-- `artifacts/models/iforest_anomaly_scores.csv`
-- `artifacts/evaluation/iforest_feature_lift.csv`
-- `eval/results/preprocessing_report.md`
-- `eval/results/iforest_training_report.md`
-
-## Chạy project
-
-### Ports
-
-| Service | Port | URL |
-|---------|------|-----|
-| Frontend (Vite) | 5173 | http://localhost:5173 |
-| Backend API (FastAPI) | 8000 | http://localhost:8000 |
-| PostgreSQL | 5432 | localhost:5432 |
+- Node.js 18+ (cho development)
+- Docker & Docker Compose (cho production)
 
 ### Cách 1: Chạy bằng Docker (Khuyến nghị)
 
@@ -138,7 +108,7 @@ API docs (Swagger): http://localhost:8000/docs
 
 ```bash
 # Vào thư mục frontend
-cd frontend
+cd src/frontend
 
 # Cài dependencies (lần đầu)
 npm install
@@ -149,14 +119,22 @@ npm run dev
 
 Frontend chạy trên http://localhost:5173
 
-### Tài khoản mặc định
+## Ports
+
+| Service | Port | URL |
+|---------|------|-----|
+| Frontend (Vite/Nginx) | 5173 | http://localhost:5173 |
+| Backend API (FastAPI) | 8000 | http://localhost:8000 |
+| PostgreSQL | 5432 | localhost:5432 |
+
+## Tài khoản mặc định
 
 | Email | Password | Role |
 |-------|----------|------|
 | admin@demo.com | admin123 | admin |
 | analyst@demo.com | analyst123 | analyst |
 
-### Environment Variables
+## Environment Variables
 
 Xem `.env.example` để biết các biến môi trường cần thiết:
 
@@ -172,7 +150,7 @@ JWT_EXPIRES_MINUTES=480
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # ML Model
-OCSVM_MODEL_PATH=src/models/ocsvm_cert_r42_chunked.joblib
+OCSVM_MODEL_PATH=weights/ocsvm_cert_r42_chunked.joblib
 OCSVM_MODEL_VERSION=ocsvm-cert-r42-chunked
 
 # LLM (optional)
@@ -180,47 +158,68 @@ MISTRAL_API_KEY=
 MISTRAL_MODEL=mistral-small-latest
 ```
 
-## Module ownership
+## ML Pipeline
 
-| Mảng | Thư mục | Deliverable |
-|---|---|---|
-| Product/PM | `docs/`, `docs/management/JOURNAL.md`, `docs/management/WORKLOG.md` | PRD, user story, task assignment |
-| API/backend | `src/api/`, `src/models/`, `src/main.py` | FastAPI app, schemas, service API |
-| Data/ML | `src/services/ueba_ml/`, `data/`, `artifacts/`, `eval/` | Feature pipeline, model training, scoring, reports |
-| Agent/LLM workflow | `src/agents/`, `src/services/` | Alert explanation workflow and services |
-| QA/DevOps | `tests/`, `.github/`, `Dockerfile`, `Makefile` | CI, tests, deploy config |
-
-## AI logging hooks
-
-Repo vẫn giữ hook logging của AI20K Build Cohort 2 trong `scripts/` và các thư mục `.agents/`, `.claude/`, `.codex/`, `.cursor/`, `.gemini/`, `.github/hooks/`.
-
-Cài pre-push hook một lần:
+Chạy preprocessing trên sample:
 
 ```bash
-bash scripts/setup_hooks.sh
-```
-```
-
-## 4. Sample Queries
-Ví dụ payload JSON gửi tới endpoint `/api/demo/analyze`:
-```json
-{
-  "user_id": "HSB0196",
-  "events": [
-    {
-      "event_type": "logon",
-      "timestamp": "2010-01-02T09:00:00Z",
-      "pc": "PC-8001"
-    },
-    {
-      "event_type": "file",
-      "timestamp": "2010-01-02T09:49:30Z",
-      "filename": "RJGC8XX5.exe"
-    }
-  ]
-}
+python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/sample/cert-r4.2-small
 ```
 
-## 5. Eval Evidences
-Bạn có thể tham khảo kết quả phân tích 5 kịch bản thực tế (lấy từ log của tập CERT) tại báo cáo [Eval Evidences](./artifacts/eval_evidences.md).
-Mọi cảnh báo đều được Model nhận diện dựa trên baseline của user, từ đó LLM sẽ tổng hợp ra một câu giải thích bằng ngôn ngữ tự nhiên.
+Chạy preprocessing trên raw dataset:
+
+```bash
+python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/raw/cert-r4.2 --chunksize 250000
+```
+
+Train Isolation Forest từ feature matrix:
+
+```bash
+python src/services/ueba_ml/pipelines/train.py
+```
+
+## Load dữ liệu CERT r4.2
+
+```bash
+# Load sample data vào database
+python scripts/load_cert_data.py
+```
+
+## Testing
+
+### Backend Tests
+
+```bash
+# Bật Docker (PostgreSQL)
+docker compose up -d
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Chạy tất cả tests (cần PostgreSQL)
+export TEST_DATABASE_URL="postgresql://ueba:ueba@localhost:5432/ueba"
+pytest tests/ -v
+
+# Chạy tests không cần DB
+pytest tests/ -v -k "not postgres"
+```
+
+### Frontend Tests
+
+```bash
+cd src/frontend
+
+# Chạy tất cả tests
+npm run test
+
+# Watch mode
+npm run test:watch
+```
+
+## Tài liệu
+
+- [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - Kiến trúc hệ thống
+- [docs/contracts/API_CONTRACT.md](docs/contracts/API_CONTRACT.md) - API Contract
+- [docs/contracts/DATA_CONTRACT.md](docs/contracts/DATA_CONTRACT.md) - Data Contract
+- [docs/planning/PRD.md](docs/planning/PRD.md) - Product Requirements Document
+- [docs/management/MVP_PROGRESS.md](docs/management/MVP_PROGRESS.md) - Tiến độ MVP
