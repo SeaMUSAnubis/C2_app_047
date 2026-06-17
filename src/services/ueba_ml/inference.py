@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -12,6 +13,10 @@ from numpy.typing import NDArray
 
 from src.config import settings
 from src.models.schemas import ModelInferResponse, ModelMetricsResponse, Severity
+
+logger = logging.getLogger(__name__)
+
+MAX_MODEL_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB limit
 
 
 @runtime_checkable
@@ -88,7 +93,23 @@ def get_deployed_ocsvm_model() -> DeployedOcsvmModel:
     if not model_path.exists():
         raise ModelArtifactError(f"Model artifact not found: {model_path}")
 
-    payload = joblib.load(model_path)
+    file_size = model_path.stat().st_size
+    if file_size > MAX_MODEL_SIZE_BYTES:
+        raise ModelArtifactError(
+            f"Model artifact too large ({file_size / 1024 / 1024:.1f} MB). "
+            f"Maximum allowed: {MAX_MODEL_SIZE_BYTES / 1024 / 1024:.0f} MB"
+        )
+
+    if file_size == 0:
+        raise ModelArtifactError("Model artifact is empty (0 bytes)")
+
+    logger.info("Loading OCSVM model from %s (%.1f MB)", model_path, file_size / 1024 / 1024)
+
+    try:
+        payload = joblib.load(model_path)
+    except Exception as exc:
+        raise ModelArtifactError(f"Failed to load model artifact (corrupted file): {exc}") from exc
+
     if not isinstance(payload, dict):
         raise ModelArtifactError("OCSVM artifact must be a dictionary payload")
 
@@ -119,7 +140,22 @@ def _model_path() -> Path:
 
 
 def _feature_frame(features: dict[str, float], columns: tuple[str, ...]) -> pd.DataFrame:
-    row = {column: float(features.get(column, 0.0)) for column in columns}
+    missing_cols: list[str] = []
+    row: dict[str, float] = {}
+    for column in columns:
+        if column in features:
+            row[column] = float(features[column])
+        else:
+            row[column] = 0.0
+            missing_cols.append(column)
+
+    if missing_cols:
+        logger.warning(
+            "Missing %d features for inference, using 0.0 as default: %s",
+            len(missing_cols),
+            missing_cols,
+        )
+
     return pd.DataFrame([row], columns=list(columns))
 
 
