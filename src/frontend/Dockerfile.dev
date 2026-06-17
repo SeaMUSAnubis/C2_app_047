@@ -1,0 +1,16 @@
+# Dev image: chạy Vite dev server với hot-reload trong container.
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Cài deps trước để tận dụng layer cache; node_modules được giữ trong
+# container (qua anonymous volume ở compose) nên không bị host ghi đè.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 5173
+
+# --host để Vite bind 0.0.0.0, cho phép truy cập từ ngoài container.
+CMD ["npm", "run", "dev", "--", "--host"]
