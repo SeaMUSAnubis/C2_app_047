@@ -131,6 +131,109 @@ RawLogEventType = Literal[
 ]
 Severity = Literal["low", "medium", "high", "critical"]
 ModelPrediction = Literal["normal", "anomaly"]
+AlertStatus = Literal["new", "investigating", "resolved", "false_positive"]
+
+
+class AlertBase(BaseModel):
+    user_id: str | None = None
+    device_id: str | None = None
+    event_log_id: int | None = None
+    model_version: str | None = None
+    title: str
+    severity: Severity
+    risk_score: int = Field(ge=0, le=100)
+    anomaly_score: float | None = None
+    risk_factors: list[str] = Field(default_factory=list)
+    explanation: str | None = None
+
+
+class AlertCreate(AlertBase):
+    pass
+
+
+class AlertRead(AlertBase):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: int
+    status: AlertStatus = "new"
+    detected_at: str
+    updated_at: str
+
+
+class AlertUpdateStatus(BaseModel):
+    status: AlertStatus
+
+
+class FrontendAlert(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: int
+    user_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("userId", "user_id"),
+        serialization_alias="userId",
+    )
+    device_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("deviceId", "device_id"),
+        serialization_alias="deviceId",
+    )
+    title: str
+    severity: Severity
+    status: AlertStatus
+    risk_score: int = Field(
+        validation_alias=AliasChoices("riskScore", "risk_score"),
+        serialization_alias="riskScore",
+    )
+    anomaly_score: float | None = Field(
+        default=None,
+        validation_alias=AliasChoices("anomalyScore", "anomaly_score"),
+        serialization_alias="anomalyScore",
+    )
+    explanation: str | None = None
+    detected_at: str = Field(
+        validation_alias=AliasChoices("detectedAt", "detected_at"),
+        serialization_alias="detectedAt",
+    )
+    updated_at: str = Field(
+        validation_alias=AliasChoices("updatedAt", "updated_at"),
+        serialization_alias="updatedAt",
+    )
+
+
+class DatasetImportRequest(BaseModel):
+    input_dir: str
+    chunksize: int = 250000
+
+
+class DatasetImportResponse(BaseModel):
+    status: str
+    message: str
+    summary: dict[str, Any] | None = None
+
+
+class FeatureBuildRequest(BaseModel):
+    input_dir: str | None = None
+
+
+class FeatureBuildResponse(BaseModel):
+    status: str
+    message: str
+    feature_count: int | None = None
+
+
+class ModelTrainRequest(BaseModel):
+    algorithm: str = "ocsvm"
+    nu: float = 0.005
+    kernel: str = "rbf"
+    gamma: str = "scale"
+
+
+class ModelTrainResponse(BaseModel):
+    status: str
+    message: str
+    model_version: str | None = None
+    metrics: dict[str, Any] | None = None
 
 
 class RawLogIngest(BaseModel):

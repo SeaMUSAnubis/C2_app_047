@@ -7,12 +7,16 @@ from pydantic import ValidationError
 from src.config import settings
 from src.models.schemas import (
     AccountPublic,
+    AlertCreate,
+    AlertRead,
+    AlertUpdateStatus,
     DashboardSummary,
     DeviceCreate,
     DeviceRead,
     DeviceUpdate,
     EventIngest,
     EventRead,
+    FrontendAlert,
     FrontendDevice,
     FrontendEventLog,
     FrontendLoginResponse,
@@ -367,3 +371,113 @@ def _account_public(account: dict) -> AccountPublic:
 
 def _paginated(items: list[dict], total: int, limit: int, offset: int) -> PaginatedResponse:
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+# ---------------------------------------------------------------------------
+# Alert Management
+# ---------------------------------------------------------------------------
+
+
+@router.post("/alerts", response_model=AlertRead, status_code=status.HTTP_201_CREATED)
+async def create_alert(
+    payload: AlertCreate,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> dict:
+    _ = current_account
+    return database.create_alert(payload.model_dump())
+
+
+@router.get("/alerts", response_model=list[FrontendAlert], response_model_by_alias=True)
+async def alerts(
+    current_account: Annotated[dict, Depends(get_current_account)],
+    status_filter: str | None = Query(None, alias="status"),
+    severity: str | None = None,
+    user_id: str | None = None,
+    device_id: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[dict[str, Any]]:
+    _ = current_account
+    filters: dict[str, Any] = {}
+    if status_filter:
+        filters["status"] = status_filter
+    if severity:
+        filters["severity"] = severity
+    if user_id:
+        filters["user_id"] = user_id
+    if device_id:
+        filters["device_id"] = device_id
+    return database.list_alerts(filters, limit, offset)
+
+
+@router.get("/alerts/summary")
+async def alert_summary(
+    current_account: Annotated[dict, Depends(get_current_account)],
+) -> dict:
+    _ = current_account
+    return database.get_alert_summary()
+
+
+@router.get("/alerts/{alert_id}", response_model=AlertRead)
+async def alert_detail(
+    alert_id: int,
+    current_account: Annotated[dict, Depends(get_current_account)],
+) -> dict:
+    _ = current_account
+    alert = database.get_alert(alert_id)
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    return alert
+
+
+@router.patch("/alerts/{alert_id}/status", response_model=AlertRead)
+async def update_alert_status(
+    alert_id: int,
+    payload: AlertUpdateStatus,
+    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
+) -> dict:
+    _ = current_account
+    alert = database.update_alert_status(alert_id, payload.status)
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    return alert
+
+
+# ---------------------------------------------------------------------------
+# Dashboard Extended APIs
+# ---------------------------------------------------------------------------
+
+
+@router.get("/dashboard/alerts-over-time")
+async def dashboard_alerts_over_time(
+    current_account: Annotated[dict, Depends(get_current_account)],
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
+) -> list[dict[str, Any]]:
+    _ = current_account
+    return database.get_alerts_over_time(days)
+
+
+@router.get("/dashboard/severity-distribution")
+async def dashboard_severity_distribution(
+    current_account: Annotated[dict, Depends(get_current_account)],
+) -> list[dict[str, Any]]:
+    _ = current_account
+    return database.get_severity_distribution()
+
+
+@router.get("/dashboard/top-risk-users")
+async def dashboard_top_risk_users(
+    current_account: Annotated[dict, Depends(get_current_account)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> list[dict[str, Any]]:
+    _ = current_account
+    return database.get_top_risk_users(limit)
+
+
+@router.get("/dashboard/top-risk-devices")
+async def dashboard_top_risk_devices(
+    current_account: Annotated[dict, Depends(get_current_account)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> list[dict[str, Any]]:
+    _ = current_account
+    return database.get_top_risk_devices(limit)

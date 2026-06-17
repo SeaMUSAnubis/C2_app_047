@@ -647,6 +647,214 @@ def list_frontend_logs(limit: int = 100) -> list[dict[str, Any]]:
         return [_row_to_dict(row) or {} for row in conn.execute(sql, (limit,)).fetchall()]
 
 
+# ---------------------------------------------------------------------------
+# Alert CRUD
+# ---------------------------------------------------------------------------
+
+
+def create_alert(payload: dict[str, Any]) -> dict[str, Any]:
+    now = utc_now()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO alerts (
+                user_id, device_id, event_log_id, model_version, title,
+                severity, status, risk_score, anomaly_score, risk_factors_json,
+                explanation, detected_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, 'new', %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (
+                payload.get("user_id"),
+                payload.get("device_id"),
+                payload.get("event_log_id"),
+                payload.get("model_version"),
+                payload["title"],
+                payload["severity"],
+                payload["risk_score"],
+                payload.get("anomaly_score"),
+                json.dumps(payload.get("risk_factors", [])),
+                payload.get("explanation"),
+                now,
+                now,
+            ),
+        ).fetchone()
+        return _decode_alert_fields(_row_to_dict(row) or {})
+
+
+def get_alert(alert_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM alerts WHERE id = %s", (alert_id,)).fetchone()
+        if row:
+            return _decode_alert_fields(_row_to_dict(row))
+        return None
+
+
+def update_alert_status(alert_id: int, status: str) -> dict[str, Any] | None:
+    now = utc_now()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            UPDATE alerts SET status = %s, updated_at = %s
+            WHERE id = %s RETURNING *
+            """,
+            (status, now, alert_id),
+        ).fetchone()
+        if row:
+            return _decode_alert_fields(_row_to_dict(row))
+        return None
+
+
+def list_alerts(
+    filters: dict[str, Any] | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    where, params = _alert_filters(filters or {})
+    sql = "SELECT * FROM alerts"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY detected_at DESC, id DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+    with get_connection() as conn:
+        return [_decode_alert_fields(_row_to_dict(row) or {}) for row in conn.execute(sql, params).fetchall()]
+
+
+def count_alerts(filters: dict[str, Any] | None = None) -> int:
+    where, params = _alert_filters(filters or {})
+    sql = "SELECT COUNT(*) FROM alerts"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    with get_connection() as conn:
+        return conn.execute(sql, params).fetchone()[0]
+
+
+def list_frontend_alerts(limit: int = 100) -> list[dict[str, Any]]:
+    sql = """
+        SELECT
+            id,
+            user_id AS "userId",
+            device_id AS "deviceId",
+            title,
+            severity,
+            status,
+            risk_score AS "riskScore",
+            anomaly_score AS "anomalyScore",
+            explanation,
+            detected_at AS "detectedAt",
+            updated_at AS "updatedAt"
+        FROM alerts
+        ORDER BY detected_at DESC, id DESC
+        LIMIT %s
+    """
+    with get_connection() as conn:
+        return [_row_to_dict(row) or {} for row in conn.execute(sql, (limit,)).fetchall()]
+
+
+def get_alert_summary() -> dict[str, Any]:
+    with get_connection() as conn:
+        row = conn.execute("""
+            SELECT
+                COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE status = 'new') AS open_count,
+                COUNT(*) FILTER (WHERE severity IN ('high', 'critical') AND status = 'new') AS high_critical_open
+            FROM alerts
+        """).fetchone()
+        return _row_to_dict(row) or {}
+
+
+def get_alerts_over_time(days: int = 30) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT
+                DATE(detected_at) AS date,
+                severity,
+                COUNT(*) AS count
+            FROM alerts
+            WHERE detected_at >= NOW() - INTERVAL '%s days'
+            GROUP BY DATE(detected_at), severity
+            ORDER BY date DESC
+        """, (days,)).fetchall()
+        return [_row_to_dict(row) or {} for row in rows]
+
+
+def get_severity_distribution() -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT severity, COUNT(*) AS count
+            FROM alerts
+            GROUP BY severity
+            ORDER BY CASE severity
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+            END
+        """).fetchall()
+        return [_row_to_dict(row) or {} for row in rows]
+
+
+def get_top_risk_users(limit: int = 10) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT
+                u.id,
+                u.username,
+                u.full_name AS name,
+                u.department,
+                u.risk_score AS "riskScore",
+                COUNT(a.id) AS alert_count
+            FROM users u
+            LEFT JOIN alerts a ON a.user_id = u.id AND a.status = 'new'
+            GROUP BY u.id, u.username, u.full_name, u.department, u.risk_score
+            ORDER BY u.risk_score DESC
+            LIMIT %s
+        """, (limit,)).fetchall()
+        return [_row_to_dict(row) or {} for row in rows]
+
+
+def get_top_risk_devices(limit: int = 10) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT
+                d.id,
+                d.hostname,
+                d.assigned_user_id AS "assignedUser",
+                d.risk_score AS "riskScore",
+                COUNT(a.id) AS alert_count
+            FROM devices d
+            LEFT JOIN alerts a ON a.device_id = d.id AND a.status = 'new'
+            GROUP BY d.id, d.hostname, d.assigned_user_id, d.risk_score
+            ORDER BY d.risk_score DESC
+            LIMIT %s
+        """, (limit,)).fetchall()
+        return [_row_to_dict(row) or {} for row in rows]
+
+
+def _alert_filters(filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
+    where: list[str] = []
+    params: list[Any] = []
+    if filters.get("status"):
+        where.append("status = %s")
+        params.append(filters["status"])
+    if filters.get("severity"):
+        where.append("severity = %s")
+        params.append(filters["severity"])
+    if filters.get("user_id"):
+        where.append("user_id = %s")
+        params.append(filters["user_id"])
+    if filters.get("device_id"):
+        where.append("device_id = %s")
+        params.append(filters["device_id"])
+    return where, params
+
+
+def _decode_alert_fields(row: dict[str, Any]) -> dict[str, Any]:
+    if "risk_factors_json" in row:
+        row["risk_factors"] = json.loads(row.pop("risk_factors_json") or "[]")
+    return row
+
+
 def _decode_raw_log_fields(row: dict[str, Any]) -> dict[str, Any]:
     for key in ("raw_payload_json", "ingest_metadata_json"):
         if key in row:

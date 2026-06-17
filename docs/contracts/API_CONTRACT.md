@@ -1,40 +1,51 @@
 # API Contract
 
-This file is the working contract between backend and frontend. Endpoint shapes should be finalized here before frontend integration.
+File này là hợp đồng làm việc giữa backend và frontend. Các endpoint shapes được finalized ở đây trước khi tích hợp frontend.
 
-## Endpoint groups
+## Nhóm endpoints
 
 ```text
-POST /api/auth/login
-GET  /api/auth/me
-GET  /api/dashboard/summary
+POST /api/auth/login           # Đăng nhập
+GET  /api/auth/me              # Lấy thông tin account hiện tại
+GET  /api/dashboard/summary    # Tổng quan dashboard
 
-GET  /api/users
-GET  /api/users/{user_id}
-POST /api/users
-PATCH /api/users/{user_id}
+GET  /api/users                # Danh sách users
+GET  /api/users/{user_id}      # Chi tiết user
+POST /api/users                # Tạo user (admin only)
+PATCH /api/users/{user_id}     # Sửa user (admin only)
 
-GET  /api/devices
-GET  /api/devices/{device_id}
-POST /api/devices
-PATCH /api/devices/{device_id}
+GET  /api/devices              # Danh sách devices
+GET  /api/devices/{device_id}  # Chi tiết device
+POST /api/devices              # Tạo device (admin only)
+PATCH /api/devices/{device_id} # Sửa device (admin only)
 
-POST /api/logs/ingest
-GET  /api/logs
-GET  /api/logs/timeline
+POST /api/logs/ingest          # Ingest event log
+GET  /api/logs                 # Danh sách event logs
 
-GET  /api/alerts
-GET  /api/alerts/{alert_id}
-PATCH /api/alerts/{alert_id}
+POST /api/raw-logs/ingest      # Ingest raw log (admin/analyst)
+POST /api/raw-logs/batch       # Batch ingest raw logs
+GET  /api/raw-logs             # Danh sách raw logs (phân trang)
+GET  /api/raw-logs/{log_id}    # Chi tiết raw log
 
-GET  /api/models/{model_version}
-POST /api/models/{model_version}/infer
-GET  /api/models/{model_version}/metrics
+GET  /api/models/{version}                # Model metadata
+POST /api/models/{version}/infer          # Model inference
+GET  /api/models/{version}/metrics        # Model metrics
+
+POST /api/alerts               # Tạo alert (admin/analyst)
+GET  /api/alerts               # Danh sách alerts (filter)
+GET  /api/alerts/summary       # Tổng quan alerts
+GET  /api/alerts/{id}          # Chi tiết alert
+PATCH /api/alerts/{id}/status  # Cập nhật status (admin/analyst)
+
+GET  /api/dashboard/alerts-over-time       # Alerts theo thời gian
+GET  /api/dashboard/severity-distribution  # Phân bố severity
+GET  /api/dashboard/top-risk-users         # Top users risk cao
+GET  /api/dashboard/top-risk-devices       # Top devices risk cao
 ```
 
-## Frontend-compatible contract
+## Contract cho Frontend
 
-The following shapes match the TypeScript types in `frontend/src/types/*`.
+Các shapes sau đây match với TypeScript types trong `frontend/src/types/*`.
 
 ### Auth
 
@@ -63,16 +74,16 @@ Response (camelCase):
 }
 ```
 
-Demo accounts:
+Tài khoản demo:
 
-- `admin@demo.com / admin123`
-- `analyst@demo.com / analyst123`
+- `admin@demo.com / admin123` (role: admin)
+- `analyst@demo.com / analyst123` (role: analyst)
 
-`GET /api/auth/me` requires `Authorization: Bearer <jwt>` and returns the current account.
+`GET /api/auth/me` yêu cầu `Authorization: Bearer <jwt>` và trả về account hiện tại.
 
 ### Dashboard
 
-`GET /api/dashboard/summary` requires a token.
+`GET /api/dashboard/summary` yêu cầu token.
 
 Response (camelCase):
 
@@ -84,14 +95,14 @@ Response (camelCase):
   "openAlerts": 0,
   "highCriticalAlerts": 0,
   "averageRiskScore": 22.3,
-  "currentModelVersion": null,
+  "currentModelVersion": "ocsvm-cert-r42-chunked",
   "lastImportTime": null
 }
 ```
 
 ### Users
 
-`GET /api/users` requires a token. Returns a direct array (no pagination wrapper).
+`GET /api/users` yêu cầu token. Trả về mảng trực tiếp (không có pagination wrapper).
 
 Response item (camelCase):
 
@@ -112,7 +123,7 @@ Response item (camelCase):
 
 ### Devices
 
-`GET /api/devices` requires a token. Returns a direct array (no pagination wrapper).
+`GET /api/devices` yêu cầu token. Trả về mảng trực tiếp.
 
 Response item (camelCase):
 
@@ -129,11 +140,11 @@ Response item (camelCase):
 }
 ```
 
-Status values: `active` (DB: `online`) or `inactive` (DB: `offline`, `retired`).
+Giá trị status: `active` (DB: `online`) hoặc `inactive` (DB: `offline`, `retired`).
 
 ### Logs
 
-`GET /api/logs` requires a token. Returns a direct array (no pagination wrapper), ordered by timestamp desc, limited to 100 records.
+`GET /api/logs` yêu cầu token. Trả về mảng trực tiếp, giới hạn 100 records.
 
 Response item (camelCase):
 
@@ -151,23 +162,22 @@ Response item (camelCase):
 }
 ```
 
-## Internal/admin contract
+## Contract nội bộ/admin
 
-The following endpoints retain the original snake_case, paginated shapes for internal/admin use:
+Các endpoints sau giữ nguyên snake_case, paginated shapes cho internal/admin use:
 
-- `POST /api/logs/ingest` - event ingest (returns full event record)
+- `POST /api/logs/ingest` - Event ingest (trả về full event record)
 - `POST /api/users`, `PATCH /api/users/{user_id}`, `GET /api/users/{user_id}` - CRUD
 - `POST /api/devices`, `PATCH /api/devices/{device_id}`, `GET /api/devices/{device_id}` - CRUD
-- `POST /api/raw-logs/ingest`, `POST /api/raw-logs/batch`, `GET /api/raw-logs` - raw log management
+- `POST /api/raw-logs/ingest`, `POST /api/raw-logs/batch`, `GET /api/raw-logs` - Raw log management
 
 ### Deployed OCSVM model
 
-The backend does not train a model at runtime. It loads the pre-trained OCSVM
-artifact from `weights/ocsvm_cert_r42_chunked.joblib`.
+Backend không train model tại runtime. Nó load pre-trained OCSVM artifact từ `weights/ocsvm_cert_r42_chunked.joblib`.
 
-`GET /api/models/ocsvm-cert-r42-chunked` requires a token and returns the deployed model metadata.
+`GET /api/models/ocsvm-cert-r42-chunked` yêu cầu token và trả về model metadata.
 
-`POST /api/models/ocsvm-cert-r42-chunked/infer` requires a token.
+`POST /api/models/ocsvm-cert-r42-chunked/infer` yêu cầu token.
 
 Request:
 
@@ -216,15 +226,15 @@ Response:
 }
 ```
 
-Missing model features are filled with `0.0`; extra submitted features are ignored and reported.
+Features bị thiếu được điền bằng `0.0`; features thừa bị bỏ qua và được báo cáo.
 
-## Response conventions
+## Quy ước response
 
-- Use ISO 8601 timestamps.
-- Use stable IDs from backend/database, not frontend-generated IDs.
-- Frontend-facing list endpoints return direct arrays.
-- Admin/internal endpoints may use pagination with `{ items, total, limit, offset }`.
-- Return machine-readable error codes with human-readable messages.
+- Sử dụng ISO 8601 cho timestamps.
+- Sử dụng stable IDs từ backend/database, không dùng frontend-generated IDs.
+- Frontend-facing list endpoints trả về mảng trực tiếp.
+- Admin/internal endpoints có thể dùng pagination với `{ items, total, limit, offset }`.
+- Trả về error codes machine-readable kèm messages human-readable.
 
 ## Environment variables
 
@@ -246,14 +256,14 @@ VITE_API_BASE_URL=http://localhost:8000/api
 
 ## LLM Provider
 
-Alert explanation uses Mistral Chat Completions:
+Alert explanation sử dụng Mistral Chat Completions:
 
 - Endpoint: `POST https://api.mistral.ai/v1/chat/completions`
 - Auth header: `Authorization: Bearer <MISTRAL_API_KEY>`
-- Default model: `mistral-small-latest`
+- Model mặc định: `mistral-small-latest`
 - Config variables:
   - `MISTRAL_API_KEY`
   - `MISTRAL_MODEL`
   - `MISTRAL_CHAT_COMPLETIONS_URL`
 
-If the API key is missing or the Mistral request fails, the backend returns a deterministic rule-based fallback explanation.
+Nếu API key thiếu hoặc Mistral request fail, backend trả về rule-based fallback explanation.

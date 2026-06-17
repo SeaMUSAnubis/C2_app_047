@@ -1,40 +1,75 @@
-# Architecture
+# Kiến Trúc Hệ Thống
 
-## Target MVP flow
+## Luồng MVP hiện tại
 
 ```text
 Endpoint Agent / Mock Agent
         |
-        | REST events
+        | REST API (POST /api/raw-logs/ingest, /api/logs/ingest)
         v
-Backend API
+Backend API (FastAPI)
         |
-        | auth, user/device/log/alert services
-        v
-Database
+        |-- Auth & Phân quyền (JWT, admin/analyst)
+        |-- Quản lý User/Device
+        |-- Log Ingestion & Normalization
+        |-- ML Inference (OneClassSVM)
+        |-- Risk Scoring (0-100)
+        |-- LLM Analysis (Mistral AI / Rule-based fallback)
         |
-        | alert/risk context
         v
-Frontend Dashboard
-
-ML Pipeline
+Database (PostgreSQL)
         |
-        | feature matrix, model artifact, scores
         v
-Artifacts + Backend integration
+Frontend Dashboard (React + Vite)
 ```
 
-## Module boundaries
+## Pipeline ML
 
-- `src/agents/`: produces or orchestrates endpoint/alert workflows.
-- `src/api/`: owns API routes.
-- `src/models/`: owns Pydantic schemas.
-- `src/services/`: owns business logic, LLM explanation, preprocessing and model training services.
-- `artifacts/`: stores generated ML outputs consumed by demo/integration code.
-- `data/`: stores local raw/sample data and schema documentation.
+```text
+CERT r4.2 CSV Dataset
+        |
+        | Preprocessing & Feature Engineering
+        v
+Feature Matrix (user/day features)
+        |
+        | Train OneClassSVM
+        v
+Model Artifact (weights/ocsvm_cert_r42_chunked.joblib)
+        |
+        | Batch Inference
+        v
+Anomaly Score → Risk Score → Alert
+```
 
-## Current implementation status
+## Ranh giới module
 
-- ML preprocessing and Isolation Forest training are implemented in `src/services/ueba_ml/pipelines/`.
-- FastAPI scaffold is implemented in `src/main.py` and `src/api/routes.py`.
-- Product requirements live in `docs/planning/PRD.md` and `docs/planning/UEBA_REQUIREMENTS.md`.
+| Module | Đường dẫn | Trách nhiệm |
+|--------|----------|-------------|
+| API Routes | `src/api/routes.py` | Định nghĩa tất cả API endpoints |
+| Models | `src/models/schemas.py` | Pydantic schemas cho request/response |
+| Auth | `src/services/auth.py` | JWT authentication, password hashing |
+| Database | `src/services/database.py` | PostgreSQL connection, CRUD operations |
+| ML Inference | `src/services/ueba_ml/inference.py` | OCSVM model loading, inference |
+| ML Pipelines | `src/services/ueba_ml/pipelines/` | Preprocessing, feature engineering, training |
+| LLM Analysis | `src/services/llm.py` | Mistral AI integration, rule-based fallback |
+| Agent | `src/agents/graph.py` | Alert explanation workflow |
+| Config | `src/config.py` | App settings (pydantic-settings) |
+
+## Trạng thái triển khai hiện tại
+
+| Tính năng | Trạng thái | Ghi chú |
+|-----------|------------|---------|
+| FastAPI backend | ✅ Hoàn thành | `src/main.py`, `src/api/routes.py` |
+| JWT Authentication | ✅ Hoàn thành | Custom JWT, PBKDF2 password hashing |
+| RBAC (admin/analyst) | ✅ Hoàn thành | `require_role()` middleware |
+| User CRUD | ✅ Hoàn thành | Create, Read, Update |
+| Device CRUD | ✅ Hoàn thành | Create, Read, Update |
+| Log Ingestion | ✅ Hoàn thành | Event logs + Raw logs |
+| OCSVM Inference | ✅ Hoàn thành | Pre-trained model, batch inference |
+| Risk Scoring | ✅ Hoàn thành | 0-100 scale, severity levels |
+| LLM Analysis | ✅ Hoàn thành | Mistral AI + rule-based fallback |
+| Dashboard API | ✅ Hoàn thành | Summary endpoint với KPIs |
+| CERT r4.2 Import | ⚠️ Một phần | Script preprocessing, chưa có API import |
+| Alert Management | ⚠️ Chưa hoàn thành | Database schema có, chưa có API endpoints |
+| Frontend Dashboard | ✅ Hoàn thành | React + Vite, 5 pages |
+| Docker | ✅ Hoàn thành | docker-compose.yml (FE + BE + DB) |
