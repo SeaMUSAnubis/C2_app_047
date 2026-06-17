@@ -4,7 +4,7 @@ from src.config import settings
 from src.services import llm
 
 
-def test_mistral_chat_completion_payload_and_headers(monkeypatch) -> None:
+def test_openrouter_chat_completion_payload_and_headers(monkeypatch) -> None:
     seen = {}
 
     class FakeResponse:
@@ -30,10 +30,10 @@ def test_mistral_chat_completion_payload_and_headers(monkeypatch) -> None:
             seen["payload"] = json
             return FakeResponse()
 
-    monkeypatch.setattr(settings, "mistral_api_key", "test-mistral-key")
-    monkeypatch.setattr(settings, "mistral_model", "mistral-small-latest")
+    monkeypatch.setattr(settings, "openrouter_api_key", "test-openrouter-key")
+    monkeypatch.setattr(settings, "openrouter_model", "openrouter/free")
     monkeypatch.setattr(
-        settings, "mistral_chat_completions_url", "https://api.mistral.ai/v1/chat/completions"
+        settings, "openrouter_chat_completions_url", "https://openrouter.ai/api/v1/chat/completions"
     )
     monkeypatch.setattr(llm.httpx, "Client", FakeClient)
 
@@ -49,27 +49,28 @@ def test_mistral_chat_completion_payload_and_headers(monkeypatch) -> None:
     )
 
     assert explanation == "Analyst-ready explanation."
-    assert seen["url"] == "https://api.mistral.ai/v1/chat/completions"
+    assert seen["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert seen["headers"] == {
-        "Authorization": "Bearer test-mistral-key",
+        "Authorization": "Bearer test-openrouter-key",
         "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5173",
+        "X-Title": "Vespionage UEBA",
     }
-    assert seen["payload"]["model"] == "mistral-small-latest"
+    assert seen["payload"]["model"] == "openrouter/free"
     assert seen["payload"]["temperature"] == 0.2
-    assert seen["payload"]["max_tokens"] == 350
-    assert seen["payload"]["response_format"] == {"type": "text"}
+    assert seen["payload"]["max_tokens"] == 500
     assert seen["payload"]["messages"][0]["role"] == "system"
     assert seen["payload"]["messages"][1]["role"] == "user"
     assert "A-42" in seen["payload"]["messages"][1]["content"]
     assert "after_hours_logon" in seen["payload"]["messages"][1]["content"]
 
 
-def test_mistral_http_error_returns_rule_based_fallback(monkeypatch) -> None:
+def test_openrouter_http_error_returns_error_message(monkeypatch) -> None:
     def raise_http_error(context):
-        raise httpx.HTTPError("mistral unavailable")
+        raise httpx.HTTPError("openrouter unavailable")
 
-    monkeypatch.setattr(settings, "mistral_api_key", "test-mistral-key")
-    monkeypatch.setattr(llm, "_call_mistral", raise_http_error)
+    monkeypatch.setattr(settings, "openrouter_api_key", "test-openrouter-key")
+    monkeypatch.setattr(llm, "_call_openrouter", raise_http_error)
 
     explanation = llm.explain_alert(
         {
@@ -80,12 +81,12 @@ def test_mistral_http_error_returns_rule_based_fallback(monkeypatch) -> None:
         }
     )
 
-    assert "Alert A-99 is classified as critical" in explanation
-    assert "bulk_file_copy" in explanation
+    assert "Lỗi khi gọi AI" in explanation
+    assert "openrouter unavailable" in explanation
 
 
-def test_mistral_missing_key_returns_rule_based_fallback(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "mistral_api_key", "")
+def test_openrouter_missing_key_returns_rule_based_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "openrouter_api_key", "")
 
     explanation = llm.explain_alert({"alert_id": "A-100", "risk_score": 61})
 

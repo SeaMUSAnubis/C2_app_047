@@ -383,8 +383,8 @@ def _paginated(items: list[dict], total: int, limit: int, offset: int) -> Pagina
 async def demo_analyze(
     payload: DemoAnalyzeRequest,
 ) -> dict:
-    from src.services.demo_pipeline import demo_pipeline
     from src.services.database import list_events
+    from src.services.demo_pipeline import demo_pipeline
 
     events = payload.events
     if not events and payload.user_id:
@@ -442,5 +442,5 @@ async def import_demo_data(
             "summary": stats
         }
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 

@@ -50,7 +50,7 @@ def _call_openrouter(context: dict[str, Any]) -> str:
         
         try:
             data = response.json()
-        except:
+        except Exception:
             data = {}
 
         if "error" in data:

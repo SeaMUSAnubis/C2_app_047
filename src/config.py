@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     )
     jwt_secret: str = Field(default="change-me-in-production", alias="JWT_SECRET")
     jwt_expires_minutes: int = Field(default=60 * 8, alias="JWT_EXPIRES_MINUTES")
+    mistral_api_key: str = Field(default="", alias="MISTRAL_API_KEY")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
     openrouter_model: str = Field(default="openrouter/free", alias="OPENROUTER_MODEL")
     openrouter_chat_completions_url: str = Field(
