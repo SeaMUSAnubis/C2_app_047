@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 import warnings
-from sklearn.exceptions import InconsistentVersionWarning
-
-warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
+from typing import Any
 
 import joblib
 import pandas as pd
+from sklearn.exceptions import InconsistentVersionWarning
 
 from src.services.llm import explain_alert
+
+warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
 
 MODEL_PATH = os.getenv("MODEL_PATH", r"d:\2 Code\TEAM_O47\Weight\ocsvm_cert_r42_chunked.joblib")
 
@@ -195,6 +195,7 @@ class DemoPipeline:
 
 def load_user_events_from_demo_csv(user_id: str) -> list[dict[str, Any]]:
     import os
+
     import pandas as pd
     data_dir = os.getenv("DATA_DIR", r"d:\2 Code\TEAM_O47\Data\data_demo")
     events = []

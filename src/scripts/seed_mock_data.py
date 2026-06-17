@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
@@ -14,10 +13,12 @@ MODEL_VERSION = "ocsvm-v1.0-cert"
 
 
 def load_csv_data(conn):
-    import os
-    import pandas as pd
-    from src.services.database import utc_now
     import json
+    import os
+
+    import pandas as pd
+
+    from src.services.database import utc_now
 
     data_dir = os.getenv("DATA_DIR", r"d:\2 Code\TEAM_O47\Data\data_demo")
     if not os.path.exists(data_dir):
@@ -144,6 +145,8 @@ def load_csv_data(conn):
 
 
 def main() -> dict:
+    import os
+
     from src.services.database import get_connection, initialize_database, utc_now
 
     initialize_database()
