@@ -29,6 +29,14 @@ class Settings(BaseSettings):
         default="ocsvm-cert-r42-chunked",
         alias="OCSVM_MODEL_VERSION",
     )
+    ocsvm_model_path: str = Field(
+        default="weights/ocsvm_cert_r42_chunked.joblib",
+        alias="OCSVM_MODEL_PATH",
+    )
+    ocsvm_model_version: str = Field(
+        default="ocsvm-cert-r42-chunked",
+        alias="OCSVM_MODEL_VERSION",
+    )
     cors_origins: str = Field(
         default="http://localhost:5173,http://127.0.0.1:5173",
         alias="CORS_ORIGINS",
