@@ -1,3 +1,3 @@
 # Presentation
 
-Place Demo Day slides, video links and pitch assets in this directory.
+Video MVP demo: https://drive.google.com/file/d/1KMY9KhPvQdtTTcCyqpy3Pe78HsEY3g0K/view?usp=sharing

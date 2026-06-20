@@ -1,65 +1,164 @@
-# Vespionage UEBA Dashboard
+# Vespionage UEBA Frontend Dashboard
 
-Chào mừng đến với dự án giao diện người dùng (UI shell) của **Vespionage UEBA Endpoint Monitoring**. Đây là một Dashboard giám sát hành vi người dùng và thiết bị dựa trên nền tảng React, TypeScript và Vite.
+## 1. Product Overview
 
-Dự án hiện tại cung cấp bộ khung giao diện với dữ liệu mẫu (mock data), cho phép người dùng thao tác, điều hướng và quan sát cách hệ thống phân tích và quản lý rủi ro trên các thiết bị cuối.
+Frontend dashboard for Vespionage / UEBA Endpoint Monitoring.
+It visualizes users, devices, normalized logs, anomaly alerts, risk scores, timelines, explanations, and admin website blocklist actions.
 
-## Danh sách các trang
+## 2. Roles
 
-Các trang trong hệ thống được thiết kế để tạo nên một luồng giám sát an ninh (analyst workflow) hoàn chỉnh:
+* **Analyst**: Can view dashboards, investigate alerts, view users/devices/logs, and see explanations. Analyst can only view or suggest/request block action.
+* **Admin**: Has all Analyst capabilities. In addition, **Admin can add suspicious URLs/domains to the blocked websites list.**
 
-### 1. Login Page (`/login`)
-- **Lý do có:** Là lớp bảo mật đầu tiên, đảm bảo chỉ những người có quyền (Admin, Analyst) mới có thể truy cập vào dữ liệu nhạy cảm của tổ chức.
-- **Tính năng:** Cung cấp form đăng nhập, xác thực người dùng. Hiện tại đang hỗ trợ các tài khoản demo (như admin/analyst).
+## 3. Pages and routes
 
-### 2. Dashboard / Overview (`/dashboard`)
-- **Lý do có:** Là "trung tâm điều khiển" cung cấp cái nhìn tổng quan toàn diện và nhanh nhất về tình trạng an ninh của toàn bộ hệ thống ngay khi đăng nhập.
-- **Tính năng:** Hiển thị các chỉ số quan trọng (KPIs) như tổng số user, thiết bị, lượng logs thu thập, các cảnh báo nguy hiểm (High/Critical Alerts), và điểm rủi ro trung bình.
+* `/login` - Authentication page
+* `/dashboard` - High-level metrics and risk distribution
+* `/alerts` - Alert list with filters
+* `/alerts/:id` - Deep dive into an alert (Timeline, Explanation, Actions)
+* `/users` - User list and risk scores
+* `/users/:id` - User profile and activity
+* `/devices` - Device list and risk scores
+* `/devices/:id` - Device details
+* `/logs` - Raw normalized endpoint logs
+* `/admin/blocked-websites` - Admin-only interface to manage blocklist
 
-### 3. Users Page (`/users`)
-- **Lý do có:** Trong hệ thống UEBA (User and Entity Behavior Analytics), người dùng là đối tượng trung tâm có khả năng gây ra rủi ro (do vô tình hoặc cố ý). Trang này giúp theo dõi và quản lý tập trung toàn bộ tài khoản.
-- **Tính năng:** Danh sách toàn bộ người dùng, điểm rủi ro (Risk Score) của từng người, tình trạng hoạt động, thiết bị đang sử dụng, phòng ban, và tìm kiếm cơ bản.
+## 4. Environment variables
 
-### 4. Devices Page (`/devices`)
-- **Lý do có:** Thiết bị cuối (Endpoint) là nơi các cuộc tấn công hoặc rò rỉ dữ liệu thường xảy ra nhất. Việc giám sát tình trạng thiết bị song song với người dùng là vô cùng cần thiết.
-- **Tính năng:** Hiển thị danh sách thiết bị (PC, Laptop), ai đang sử dụng, điểm rủi ro của thiết bị, số cảnh báo đang mở và thời gian hoạt động gần nhất.
+Create a `.env` file in the `frontend` directory:
+```
+VITE_API_BASE_URL=http://localhost:8000/api
+VITE_USE_MOCKS=true
+```
 
-### 5. Event Logs Page (`/logs`)
-- **Lý do có:** Đây là nền tảng dữ liệu gốc chứng minh các điểm số rủi ro (Risk Score) không phải được tạo ra ngẫu nhiên. Các log ghi lại toàn bộ hoạt động của hệ thống là bằng chứng để các nhà phân tích (analyst) tiến hành điều tra.
-- **Tính năng:** Bảng dữ liệu log chuyên sâu với thời gian, loại sự kiện (logon, file, http,...), người dùng/thiết bị liên quan và chi tiết hành động.
+## 5. How to run
 
-*(Các trang như Alerts, Data Import, ML Models, Settings đang được quy hoạch và sẽ hoàn thiện ở các Sprint tiếp theo)*
+```bash
+cd src/frontend
+npm install
+npm run dev
+```
 
----
+## 6. Demo accounts
 
-## Hướng dẫn sử dụng và Cài đặt
+When `VITE_USE_MOCKS=true`, you can use the following mock accounts:
+```
+Admin:
+email: admin@demo.com
+password: password123
 
-### Yêu cầu hệ thống
-- Node.js (phiên bản 18+ khuyến nghị)
-- npm hoặc yarn
+Analyst:
+email: analyst@demo.com
+password: password123
+```
 
-### Cài đặt
-1. Mở Terminal (Command Prompt / PowerShell) và trỏ vào thư mục `frontend`:
-   ```bash
-   cd C2-App-047\frontend
-   ```
-2. Cài đặt các gói thư viện cần thiết:
-   ```bash
-   npm install
-   ```
+## 7. API contract for backend
 
-### Chạy ứng dụng trên máy cá nhân
-1. Khởi động môi trường phát triển (Dev server):
-   ```bash
-   npm run dev
-   ```
-2. Mở trình duyệt và truy cập vào đường dẫn:
-   **http://localhost:5173/**
+```http
+POST /api/auth/login
+GET /api/auth/me
 
-### Tài khoản Demo (để test đăng nhập)
-Để vượt qua màn hình Login và trải nghiệm Dashboard, bạn có thể sử dụng các email sau (mật khẩu nhập bất kỳ):
-- Dành cho quyền Quản trị: `admin@demo.com`
-- Dành cho quyền Phân tích viên: `analyst@demo.com`
+GET /api/dashboard/summary
+GET /api/dashboard/risk-distribution
+GET /api/dashboard/recent-alerts
+GET /api/dashboard/top-risk-users
+GET /api/dashboard/top-suspicious-domains
+GET /api/dashboard/event-volume
 
----
-*Dự án hiện đang sử dụng dữ liệu mẫu (Mock Data). Trong tương lai, hệ thống sẽ kết nối với Backend API thực tế thông qua biến môi trường `VITE_API_BASE_URL`.*
+GET /api/alerts
+GET /api/alerts/:id
+GET /api/alerts/:id/timeline
+GET /api/alerts/:id/explanation
+PATCH /api/alerts/:id/status
+
+GET /api/users
+GET /api/users/:id
+GET /api/users/:id/logs
+GET /api/users/:id/alerts
+GET /api/users/:id/devices
+
+GET /api/devices
+GET /api/devices/:id
+GET /api/devices/:id/logs
+GET /api/devices/:id/alerts
+
+GET /api/logs
+
+GET /api/admin/blocked-websites
+POST /api/admin/blocked-websites
+PATCH /api/admin/blocked-websites/:id
+DELETE /api/admin/blocked-websites/:id
+```
+
+## 8. Expected response schemas
+
+**Login Response:**
+```json
+{
+  "access_token": "demo-token",
+  "token_type": "bearer",
+  "user": {
+    "id": "acc_admin",
+    "email": "admin@demo.com",
+    "name": "Demo Admin",
+    "role": "admin"
+  }
+}
+```
+
+**Dashboard Summary:**
+```json
+{
+  "total_users": 120,
+  "total_devices": 86,
+  "total_logs": 245000,
+  "active_alerts": 14,
+  "high_risk_users": 6,
+  "critical_alerts": 2,
+  "blocked_websites": 5
+}
+```
+
+**Alert Explanation:**
+```json
+{
+  "alert_id": "ALERT-1021",
+  "summary": "The user showed abnormal external web access outside normal working hours.",
+  "why_suspicious": [
+    "The activity happened outside the user's historical baseline.",
+    "The user accessed multiple external domains in a short time window."
+  ],
+  "evidence": [
+    "Risk score is 87/100.",
+    "Top anomalous feature: after_hours_http_count."
+  ],
+  "baseline_comparison": "The user normally has low HTTP activity after working hours.",
+  "recommended_action": [
+    "Review the timeline.",
+    "Check whether the domain is business-related.",
+    "Escalate or block the domain if confirmed suspicious."
+  ],
+  "generated_by": "rule_based"
+}
+```
+
+## 9. Mock mode
+
+* Khi backend chưa chạy, frontend dùng mock data (`VITE_USE_MOCKS=true`).
+* Khi backend sẵn sàng, set env để gọi API thật.
+* Không sửa component khi chuyển mock sang API thật.
+
+## 10. Backend integration notes
+
+* JWT auth trả về role
+* Admin-only endpoint cho blocked websites
+* Alert endpoint có suspicious_urls
+* Alert detail có timeline
+* Explanation có thể là LLM hoặc rule_based fallback
+* Risk score luôn trong khoảng 0-100
+* Severity enum thống nhất: low/medium/high/critical
+* Status enum thống nhất: new/investigating/resolved/false_positive
+
+## 11. Privacy note
+
+This dashboard is for demo/security monitoring purposes. It should display endpoint security metadata only and avoid exposing sensitive personal content.

@@ -1,112 +1,62 @@
-import { useState, useEffect } from 'react';
-import { PageHeader } from '../components/layout/PageHeader';
-import { ShieldAlert, Activity, CheckCircle, Clock } from 'lucide-react';
-import '../styles/alerts.css';
-import { getAlerts } from '../lib/apiClient';
 
-export function AlertsPage() {
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedAlert, setSelectedAlert] = useState<any>(null);
+import { mockAlerts } from '../mocks/mockData';
 
-  useEffect(() => {
-    async function fetchAlerts() {
-      try {
-        const data = await getAlerts();
-        setAlerts(data);
-        if (data.length > 0) setSelectedAlert(data[0]);
-      } catch (err) {
-        console.error("Failed to load alerts", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAlerts();
-  }, []);
-
-  if (loading) {
-    return <div className="loading-spinner">Loading Alerts...</div>;
-  }
-
+export default function AlertsPage() {
   return (
-    <section className="alerts-page">
-      <PageHeader
-        title="Security Alerts"
-        description="Review and investigate behavioral anomalies detected by OCSVM model."
-      />
-      
-      <div className="alerts-container">
-        {/* Sidebar */}
-        <div className="alerts-sidebar">
-          <h3>Open Alerts ({alerts.length})</h3>
-          <div className="alerts-list">
-            {alerts.map((alert) => (
-              <div 
-                key={alert.id} 
-                className={`alert-card ${selectedAlert?.id === alert.id ? 'active' : ''} severity-${alert.severity}`}
-                onClick={() => setSelectedAlert(alert)}
-              >
-                <div className="alert-card-header">
-                  <ShieldAlert size={16} />
-                  <span>{alert.title}</span>
-                </div>
-                <div className="alert-card-meta">
-                  <span className="risk-badge">Risk: {alert.riskScore}</span>
-                  <span className="time-badge"><Clock size={12}/> {new Date(alert.detectedAt).toLocaleTimeString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Panel */}
-        <div className="alert-detail-panel">
-          {selectedAlert ? (
-            <div className="alert-detail-content">
-              <div className="detail-header">
-                <h2>{selectedAlert.title}</h2>
-                <div className="status-badge status-new">Status: {selectedAlert.status.toUpperCase()}</div>
-              </div>
-              
-              <div className="detail-grid">
-                <div className="detail-box">
-                  <h4><Activity size={16} /> Risk Analysis</h4>
-                  <div className="score-display">
-                    <div className="score-circle">
-                      <span className="val">{selectedAlert.riskScore}</span>
-                      <span className="lbl">Score</span>
-                    </div>
-                    <div className="factors">
-                      <h5>Top Factors:</h5>
-                      {selectedAlert.riskFactors?.map((f: string, i: number) => (
-                        <span key={i} className="factor-tag">{f}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="detail-box">
-                  <h4>Entities Involved</h4>
-                  <p><strong>User:</strong> {selectedAlert.userName || selectedAlert.user_id}</p>
-                  <p><strong>Device:</strong> {selectedAlert.deviceName || selectedAlert.device_id}</p>
-                </div>
-              </div>
-
-              <div className="llm-explanation-box">
-                <h4>AI Explainer (LLM)</h4>
-                <p>{selectedAlert.explanation}</p>
-              </div>
-              
-              <div className="action-buttons">
-                <button className="btn-primary">Start Investigation</button>
-                <button className="btn-secondary"><CheckCircle size={16} /> Mark as False Positive</button>
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state">Select an alert to view details.</div>
-          )}
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-white">Alerts Management</h1>
+        <div className="flex gap-2">
+          {/* Filters placeholder */}
+          <select className="bg-surface border border-border text-sm rounded px-3 py-1.5 text-white">
+            <option>All Severities</option>
+            <option>High</option>
+            <option>Critical</option>
+          </select>
+          <select className="bg-surface border border-border text-sm rounded px-3 py-1.5 text-white">
+            <option>All Status</option>
+            <option>New</option>
+            <option>Investigating</option>
+          </select>
         </div>
       </div>
-    </section>
+
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-background border-b border-border text-slate-400">
+            <tr>
+              <th className="px-4 py-3 font-medium">Alert ID</th>
+              <th className="px-4 py-3 font-medium">User</th>
+              <th className="px-4 py-3 font-medium">Severity</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Reason</th>
+              <th className="px-4 py-3 font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {mockAlerts.map(alert => (
+              <tr key={alert.id} className="hover:bg-background transition-colors">
+                <td className="px-4 py-3 font-medium text-white">{alert.id}</td>
+                <td className="px-4 py-3">{alert.user_name}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-1 rounded text-xs uppercase font-medium ${alert.severity === 'critical' ? 'bg-red-500/20 text-red-500' : 'bg-orange-500/20 text-orange-500'}`}>
+                    {alert.severity}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="px-2 py-1 rounded text-xs uppercase font-medium bg-blue-500/20 text-blue-500">
+                    {alert.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 truncate max-w-[200px]">{alert.main_reason}</td>
+                <td className="px-4 py-3">
+                  <button className="text-primary hover:underline text-sm font-medium">View Detail</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
