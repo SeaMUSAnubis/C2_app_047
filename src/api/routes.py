@@ -7,9 +7,9 @@ from pydantic import ValidationError
 from src.config import settings
 from src.models.schemas import (
     AccountPublic,
-    DashboardSummary,
     AnalyzeRequest,
     AnalyzeResponse,
+    DashboardSummary,
     DeviceCreate,
     DeviceRead,
     DeviceUpdate,
