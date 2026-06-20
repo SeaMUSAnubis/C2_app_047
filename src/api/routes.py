@@ -8,8 +8,8 @@ from src.config import settings
 from src.models.schemas import (
     AccountPublic,
     DashboardSummary,
-    DemoAnalyzeRequest,
-    DemoAnalyzeResponse,
+    AnalyzeRequest,
+    AnalyzeResponse,
     DeviceCreate,
     DeviceRead,
     DeviceUpdate,
@@ -379,9 +379,9 @@ def _paginated(items: list[dict], total: int, limit: int, offset: int) -> Pagina
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.post("/demo/analyze", response_model=DemoAnalyzeResponse)
-async def demo_analyze(
-    payload: DemoAnalyzeRequest,
+@router.post("/analysis/analyze", response_model=AnalyzeResponse)
+async def analyze(
+    payload: AnalyzeRequest,
 ) -> dict:
     from src.services.database import list_events
     from src.services.demo_pipeline import demo_pipeline
@@ -396,18 +396,18 @@ async def demo_analyze(
             db_events = list_events({"user_id": payload.user_id})
             events = db_events
 
-    print(f"\n[Demo Analysis] Bắt đầu phân tích cho user: {payload.user_id}")
-    print(f"[Demo Analysis] Đang xử lý {len(events)} sự kiện qua model One-Class SVM...")
+    print(f"\n[Analysis] Bắt đầu phân tích cho user: {payload.user_id}")
+    print(f"[Analysis] Đang xử lý {len(events)} sự kiện qua model One-Class SVM...")
     
     result = demo_pipeline.analyze(events, payload.user_id)
     
     if "error" in result:
-        print(f"[Demo Analysis] Lỗi: {result['error']}")
+        print(f"[Analysis] Lỗi: {result['error']}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result["error"])
         
-    print(f"[Demo Analysis] Phân tích hoàn tất!")
-    print(f"[Demo Analysis] - Bất thường (Anomaly): {result.get('is_anomaly')}")
-    print(f"[Demo Analysis] - Điểm rủi ro (Risk Score): {result.get('risk_score')}")
+    print("[Analysis] Phân tích hoàn tất!")
+    print(f"[Analysis] - Bất thường (Anomaly): {result.get('is_anomaly')}")
+    print(f"[Analysis] - Điểm rủi ro (Risk Score): {result.get('risk_score')}")
         
     if result.get("is_anomaly"):
         from src.services.database import create_alert
@@ -437,20 +437,20 @@ async def demo_analyze(
 
     return result
 
-@router.post("/demo/analyze-all")
-async def demo_analyze_all() -> dict:
-    from src.services.database import list_events, list_users, create_alert
+@router.post("/analysis/analyze-all")
+async def analyze_all() -> dict:
+    from src.services.database import create_alert, list_events, list_users
     from src.services.demo_pipeline import demo_pipeline
     
-    print("\n[Demo Analysis All] Bắt đầu phân tích toàn bộ user...")
+    print("\n[Analysis All] Bắt đầu phân tích toàn bộ user...")
     users = list_users({})
     total_users = len(users)
     anomalies_found = 0
     errors = 0
     
-    print(f"[Demo Analysis All] Tìm thấy {total_users} users. Bắt đầu phân tích từng user...")
+    print(f"[Analysis All] Tìm thấy {total_users} users. Bắt đầu phân tích từng user...")
     
-    for i, user in enumerate(users):
+    for _i, user in enumerate(users):
         user_id = user["id"]
         # print(f"[{i+1}/{total_users}] Analyzing user {user_id}...")
         events = list_events({"user_id": user_id})
@@ -488,7 +488,7 @@ async def demo_analyze_all() -> dict:
             except Exception as e:
                 print(f"Failed to create alert for {user_id}: {e}")
                 
-    print(f"[Demo Analysis All] Hoàn tất! Phân tích {total_users} users. Phát hiện {anomalies_found} bất thường.")
+    print(f"[Analysis All] Hoàn tất! Phân tích {total_users} users. Phát hiện {anomalies_found} bất thường.")
     
     return {
         "status": "completed",
