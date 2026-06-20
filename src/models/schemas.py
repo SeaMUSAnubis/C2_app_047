@@ -461,12 +461,12 @@ class FrontendEventLog(BaseModel):
     )
 
 
-class DemoAnalyzeRequest(BaseModel):
+class AnalyzeRequest(BaseModel):
     user_id: str
     events: list[dict[str, Any]]
 
 
-class DemoAnalyzeResponse(BaseModel):
+class AnalyzeResponse(BaseModel):
     is_anomaly: bool
     anomaly_score: float
     risk_score: int

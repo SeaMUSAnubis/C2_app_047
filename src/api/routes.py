@@ -7,12 +7,9 @@ from pydantic import ValidationError
 from src.config import settings
 from src.models.schemas import (
     AccountPublic,
-    AlertCreate,
-    AlertRead,
-    AlertUpdateStatus,
+    AnalyzeRequest,
+    AnalyzeResponse,
     DashboardSummary,
-    DemoAnalyzeRequest,
-    DemoAnalyzeResponse,
     DeviceCreate,
     DeviceRead,
     DeviceUpdate,
@@ -375,124 +372,9 @@ def _paginated(items: list[dict], total: int, limit: int, offset: int) -> Pagina
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-# ---------------------------------------------------------------------------
-# Alert Management
-# ---------------------------------------------------------------------------
-
-
-@router.post("/alerts", response_model=AlertRead, status_code=status.HTTP_201_CREATED)
-async def create_alert(
-    payload: AlertCreate,
-    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
-) -> dict:
-    _ = current_account
-    return database.create_alert(payload.model_dump())
-
-
-@router.get("/alerts", response_model=list[FrontendAlert], response_model_by_alias=True)
-async def alerts(
-    current_account: Annotated[dict, Depends(get_current_account)],
-    status_filter: str | None = Query(None, alias="status"),
-    severity: str | None = None,
-    user_id: str | None = None,
-    device_id: str | None = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[dict[str, Any]]:
-    _ = current_account
-    filters: dict[str, Any] = {}
-    if status_filter:
-        filters["status"] = status_filter
-    if severity:
-        filters["severity"] = severity
-    if user_id:
-        filters["user_id"] = user_id
-    if device_id:
-        filters["device_id"] = device_id
-    return database.list_alerts(filters, limit, offset)
-
-
-@router.get("/alerts/summary")
-async def alert_summary(
-    current_account: Annotated[dict, Depends(get_current_account)],
-) -> dict:
-    _ = current_account
-    return database.get_alert_summary()
-
-
-@router.get("/alerts/{alert_id}", response_model=AlertRead)
-async def alert_detail(
-    alert_id: int,
-    current_account: Annotated[dict, Depends(get_current_account)],
-) -> dict:
-    _ = current_account
-    alert = database.get_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    return alert
-
-
-@router.patch("/alerts/{alert_id}/status", response_model=AlertRead)
-async def update_alert_status(
-    alert_id: int,
-    payload: AlertUpdateStatus,
-    current_account: Annotated[dict, Depends(require_role("admin", "analyst"))],
-) -> dict:
-    _ = current_account
-    alert = database.update_alert_status(alert_id, payload.status)
-    if not alert:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    return alert
-
-
-# ---------------------------------------------------------------------------
-# Dashboard Extended APIs
-# ---------------------------------------------------------------------------
-
-
-@router.get("/dashboard/alerts-over-time")
-async def dashboard_alerts_over_time(
-    current_account: Annotated[dict, Depends(get_current_account)],
-    days: Annotated[int, Query(ge=1, le=365)] = 30,
-) -> list[dict[str, Any]]:
-    _ = current_account
-    return database.get_alerts_over_time(days)
-
-
-@router.get("/dashboard/severity-distribution")
-async def dashboard_severity_distribution(
-    current_account: Annotated[dict, Depends(get_current_account)],
-) -> list[dict[str, Any]]:
-    _ = current_account
-    return database.get_severity_distribution()
-
-
-@router.get("/dashboard/top-risk-users")
-async def dashboard_top_risk_users(
-    current_account: Annotated[dict, Depends(get_current_account)],
-    limit: Annotated[int, Query(ge=1, le=50)] = 10,
-) -> list[dict[str, Any]]:
-    _ = current_account
-    return database.get_top_risk_users(limit)
-
-
-@router.get("/dashboard/top-risk-devices")
-async def dashboard_top_risk_devices(
-    current_account: Annotated[dict, Depends(get_current_account)],
-    limit: Annotated[int, Query(ge=1, le=50)] = 10,
-) -> list[dict[str, Any]]:
-    _ = current_account
-    return database.get_top_risk_devices(limit)
-
-
-# ---------------------------------------------------------------------------
-# Demo & Import APIs
-# ---------------------------------------------------------------------------
-
-
-@router.post("/demo/analyze", response_model=DemoAnalyzeResponse)
-async def demo_analyze(
-    payload: DemoAnalyzeRequest,
+@router.post("/analysis/analyze", response_model=AnalyzeResponse)
+async def analyze(
+    payload: AnalyzeRequest,
 ) -> dict:
     from src.services.database import list_events
     from src.services.demo_pipeline import demo_pipeline
@@ -507,9 +389,18 @@ async def demo_analyze(
             db_events = list_events({"user_id": payload.user_id})
             events = db_events
 
+    print(f"\n[Analysis] Bắt đầu phân tích cho user: {payload.user_id}")
+    print(f"[Analysis] Đang xử lý {len(events)} sự kiện qua model One-Class SVM...")
+    
     result = demo_pipeline.analyze(events, payload.user_id)
+    
     if "error" in result:
+        print(f"[Analysis] Lỗi: {result['error']}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result["error"])
+        
+    print("[Analysis] Phân tích hoàn tất!")
+    print(f"[Analysis] - Bất thường (Anomaly): {result.get('is_anomaly')}")
+    print(f"[Analysis] - Điểm rủi ro (Risk Score): {result.get('risk_score')}")
         
     if result.get("is_anomaly"):
         from src.services.database import create_alert
@@ -538,6 +429,65 @@ async def demo_analyze(
 
     return result
 
+@router.post("/analysis/analyze-all")
+async def analyze_all() -> dict:
+    from src.services.database import create_alert, list_events, list_users
+    from src.services.demo_pipeline import demo_pipeline
+    
+    print("\n[Analysis All] Bắt đầu phân tích toàn bộ user...")
+    users = list_users({})
+    total_users = len(users)
+    anomalies_found = 0
+    errors = 0
+    
+    print(f"[Analysis All] Tìm thấy {total_users} users. Bắt đầu phân tích từng user...")
+    
+    for _i, user in enumerate(users):
+        user_id = user["id"]
+        # print(f"[{i+1}/{total_users}] Analyzing user {user_id}...")
+        events = list_events({"user_id": user_id})
+        
+        if not events:
+            continue
+            
+        result = demo_pipeline.analyze(events, user_id)
+        if "error" in result:
+            errors += 1
+            continue
+            
+        if result.get("is_anomaly"):
+            anomalies_found += 1
+            top_factors = result.get("top_factors", [])
+            risk_score = result.get("risk_score", 0)
+            
+            if top_factors:
+                title = f"Suspicious Behavior: {', '.join(top_factors)}"
+            else:
+                title = "Suspicious Behavior Detected"
+                
+            alert_payload = {
+                "user_id": user_id,
+                "title": title,
+                "risk_score": risk_score,
+                "anomaly_score": result.get("anomaly_score"),
+                "risk_factors": top_factors,
+                "explanation": result.get("explanation"),
+                "severity": "high" if risk_score > 70 else "medium",
+                "status": "new"
+            }
+            try:
+                create_alert(alert_payload)
+            except Exception as e:
+                print(f"Failed to create alert for {user_id}: {e}")
+                
+    print(f"[Analysis All] Hoàn tất! Phân tích {total_users} users. Phát hiện {anomalies_found} bất thường.")
+    
+    return {
+        "status": "completed",
+        "total_users_analyzed": total_users,
+        "anomalies_found": anomalies_found,
+        "errors": errors
+    }
 
 @router.post("/datasets/cert-r42/import")
 async def import_demo_data(
