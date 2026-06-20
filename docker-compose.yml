@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgresql://ueba:ueba@db:5432/ueba
       MODEL_PATH: /app/Weight/ocsvm_cert_r42_chunked.joblib
       DATA_DIR: /app/Data/data_demo
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost
     depends_on:
       db:
         condition: service_healthy
