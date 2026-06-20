@@ -83,6 +83,24 @@ export async function analyzeDemo(payload: any) {
   return response.json();
 }
 
+export async function analyzeAllDemo() {
+  if (!API_BASE_URL) {
+    throw new Error('API Base URL is required for demo analysis');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/demo/analyze-all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Analyze all failed: ${errorText}`);
+  }
+
+  return response.json();
+}
+
 export async function getAlerts() {
   try {
     return await request<any[]>('/alerts');
