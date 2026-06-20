@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Database, Play, CheckCircle, AlertTriangle } from 'lucide-react';
-import { importDemoData, analyzeDemo } from '../lib/apiClient';
+import { importDemoData, analyzeAllDemo } from '../lib/apiClient';
 
 export function DataImportPage() {
   const [status, setStatus] = useState<'idle' | 'importing' | 'analyzing' | 'done' | 'error'>('idle');
@@ -25,10 +25,10 @@ export function DataImportPage() {
     try {
       setStatus('analyzing');
       setErrorMsg('');
-      // Using an arbitrary demo user for the analysis
-      await analyzeDemo({ user_id: 'BDV0168', events: [] }); 
+      // Phân tích toàn bộ data đã import
+      const result = await analyzeAllDemo(); 
       setStatus('done');
-      alert('Analysis completed successfully. Check the Alerts page.');
+      alert(`Phân tích hoàn tất! Đã kiểm tra ${result.total_users_analyzed} users và phát hiện ${result.anomalies_found} bất thường. Hãy kiểm tra trang Alerts.`);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to run analysis');
       setStatus('error');
@@ -47,7 +47,7 @@ export function DataImportPage() {
           <Database size={24} className="text-blue-600" />
           CERT r4.2 Demo Data
         </h3>
-        
+
         <p className="text-gray-300 mb-6">
           This will inject a predefined set of mock events and alerts simulating the CERT r4.2 dataset to demonstrate the One-Class SVM model capabilities.
         </p>
@@ -61,7 +61,7 @@ export function DataImportPage() {
             <Play size={18} />
             {status === 'importing' ? 'Importing...' : 'Run Demo Import'}
           </button>
-          
+
           {summary && (
             <button
               onClick={runAnalysis}
