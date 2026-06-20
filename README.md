@@ -30,7 +30,7 @@ uvicorn src.main:app --reload --port 8000
 ### Cài đặt Frontend
 ```bash
 # 1. Chuyển vào thư mục frontend
-cd "d:\2 Code\TEAM_O47\C2-App-047\frontend"
+cd "d:\2 Code\TEAM_O47\C2-App-047\src\frontend"
 
 # 2. Cài đặt các gói thư viện
 npm install
@@ -51,7 +51,7 @@ JWT_SECRET="your-secret-key-here"
 ```
 
 ### Frontend `.env`
-Tạo file `.env` tại thư mục `frontend`:
+Tạo file `.env` tại thư mục `src/frontend`:
 ```env
 VITE_API_BASE_URL=http://localhost:8000/api
 ```
@@ -138,7 +138,7 @@ API docs (Swagger): http://localhost:8000/docs
 
 ```bash
 # Vào thư mục frontend
-cd frontend
+cd src/frontend
 
 # Cài dependencies (lần đầu)
 npm install
