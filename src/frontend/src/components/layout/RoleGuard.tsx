@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../../store/authStore';
+import { useAuth } from '../../store/useAuth';
 import type { UserRole } from '../../types';
 
 export default function RoleGuard({ allowedRoles }: { allowedRoles: UserRole[] }) {

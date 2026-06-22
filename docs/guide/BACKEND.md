@@ -170,7 +170,7 @@ VITE_API_BASE_URL=http://localhost:8000/api npm run dev
 
 ## Frontend-facing API contract
 
-Chi tiết contract nằm ở `docs/contracts/API_CONTRACT.md`.
+Chi tiết contract nằm ở `docs/API_CONTRACT.md`.
 
 Các response chính:
 
@@ -367,7 +367,7 @@ The endpoint requires `Authorization: Bearer <token>`. Login first and pass the 
 
 ## Related docs
 
-- `docs/contracts/API_CONTRACT.md`
-- `docs/contracts/DATA_CONTRACT.md`
-- `docs/architecture/ARCHITECTURE.md`
+- `docs/API_CONTRACT.md`
+- `docs/DATA_CONTRACT.md`
+- `docs/ARCHITECTURE.md`
 - `README.md`

@@ -45,7 +45,7 @@ AGENTS.md
 *.log
 *.db
 *.sqlite3
-weights/
+/weights/
 
 # Test coverage
 htmlcov/
@@ -54,6 +54,7 @@ coverage.xml
 
 # Docker
 docker-compose.override.yml
+.docker/
 
 # Node/frontend
 node_modules/

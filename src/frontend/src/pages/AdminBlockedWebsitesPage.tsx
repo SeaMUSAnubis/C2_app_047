@@ -1,61 +1,72 @@
-import { mockBlockedWebsites } from '../mocks/mockData';
-import { useAuth } from '../store/authStore';
+import { useEffect, useMemo, useState } from 'react';
+import { ShieldBan } from 'lucide-react';
+import { PageHeader } from '../components/layout/PageHeader';
+import { DataTable } from '../components/security/DataTable';
+import type { Column } from '../components/security/DataTable';
+import { getAlerts } from '../lib/apiClient';
+import type { AlertItem } from '../types/security';
+
+interface BlockedSite {
+  domain: string;
+  reason: string;
+  alert: string;
+  status: string;
+}
+
+function extractDomain(alert: AlertItem) {
+  const resource = alert.evidence?.find((item) => item.toLowerCase().includes('resource:')) ?? alert.device;
+  const value = resource.replace(/^resource:\s*/i, '').trim();
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return value || alert.device;
+  }
+}
 
 export default function AdminBlockedWebsitesPage() {
-  const { user } = useAuth();
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let ignore = false;
+    getAlerts({ limit: 200, offset: 0 })
+      .then(({ rows }) => { if (!ignore) setAlerts(rows.filter((alert) => alert.riskScore >= 70)); })
+      .catch((err: unknown) => { if (!ignore) setError(err instanceof Error ? err.message : 'Không thể tải danh sách chặn'); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, []);
+
+  const blockedSites = useMemo(() => alerts.map((alert) => ({
+    domain: extractDomain(alert),
+    reason: alert.title,
+    alert: alert.id,
+    status: 'Đang chặn',
+  })), [alerts]);
+
+  const columns: Column<BlockedSite>[] = [
+    { key: 'domain', header: 'Tên miền', render: (s) => <strong>{s.domain}</strong> },
+    { key: 'reason', header: 'Lý do' },
+    { key: 'alert', header: 'Cảnh báo nguồn' },
+    { key: 'status', header: 'Trạng thái', render: (s) => <span className="status-pill">{s.status}</span> },
+    { key: 'actions', header: 'Thao tác', align: 'center', render: () => <button className="table-action">Cập nhật</button> },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Blocked Websites</h1>
-          <p className="text-sm text-slate-400 mt-1">Manage domains/URLs blocked based on UEBA alerts</p>
-        </div>
-        <button className="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-          Add Blocked Website
-        </button>
-      </div>
-
-      {user?.role !== 'admin' && (
-        <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-lg">
-          Warning: This page is restricted to Admin users only.
-        </div>
-      )}
-
-      <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-background border-b border-border text-slate-400">
-            <tr>
-              <th className="px-4 py-3 font-medium">Domain / URL</th>
-              <th className="px-4 py-3 font-medium">Reason</th>
-              <th className="px-4 py-3 font-medium">Source Alert</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {mockBlockedWebsites.map(bw => (
-              <tr key={bw.id} className="hover:bg-background transition-colors">
-                <td className="px-4 py-3">
-                  <div className="font-medium text-white">{bw.domain}</div>
-                  <div className="text-xs text-slate-500">{bw.url}</div>
-                </td>
-                <td className="px-4 py-3">{bw.reason}</td>
-                <td className="px-4 py-3 text-primary">{bw.source_alert_id}</td>
-                <td className="px-4 py-3">
-                  <span className="px-2 py-1 rounded text-xs uppercase font-medium bg-green-500/20 text-green-500">
-                    {bw.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <button className="text-slate-400 hover:text-white mr-3">Edit</button>
-                  <button className="text-red-500 hover:text-red-400">Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="page-stack">
+      <PageHeader eyebrow="Quản trị danh sách chặn" title="Website bị chặn" description="Quản lý tên miền/URL được chặn dựa trên cảnh báo UEBA." actions={<button className="secondary-action"><ShieldBan size={17} /> Thêm tên miền</button>} />
+      <section className="panel-card">
+        {loading && <p>Đang tải danh sách chặn...</p>}
+        {error && <p className="error-message">{error}</p>}
+        {!loading && !error && blockedSites.length === 0 && <p>Chưa có tên miền cần chặn từ cảnh báo.</p>}
+        <DataTable<BlockedSite>
+          columns={columns}
+          rows={blockedSites}
+          rowKey={(s) => s.domain}
+          emptyText="Chưa có tên miền cần chặn"
+        />
+      </section>
     </div>
   );
 }
+

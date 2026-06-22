@@ -1,6 +1,6 @@
 # Báo Cáo Tiến Độ MVP (Cập nhật)
 
-**Dựa trên:** `docs/planning/PRD.md`  
+**Dựa trên:** `docs/PRD.md`  
 **Ngày:** 2026-06-17  
 **Branch:** BuiHoangLinh_2A202600804  
 **Commit:** Backend MVP implementation complete
