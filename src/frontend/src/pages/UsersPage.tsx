@@ -1,95 +1,149 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search, UserRoundCheck } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
-import { LoadingState } from '../components/common/LoadingState';
-import { EmptyState } from '../components/common/EmptyState';
-import { RiskScore } from '../components/common/RiskScore';
-import { StatusBadge } from '../components/common/StatusBadge';
+import { DataTable } from '../components/security/DataTable';
+import { RiskScore } from '../components/security/RiskScore';
 import { getUsers } from '../lib/apiClient';
-import { formatDate } from '../lib/format';
-import type { User } from '../types/user';
+import { riskLevelOptions } from '../lib/labels';
+import type { UserEntity } from '../types/security';
+
+const PAGE_SIZE = 25;
 
 export function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserEntity[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [selected, setSelected] = useState<UserEntity | null>(null);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [department, setDepartment] = useState('all');
+  const [riskLevel, setRiskLevel] = useState('all');
+  const [page, setPage] = useState(1);
+
+  const loadPage = useCallback(async (targetPage: number) => {
+    setLoading(true);
+    setError('');
+    try {
+      const { rows, total } = await getUsers({ limit: PAGE_SIZE, offset: (targetPage - 1) * PAGE_SIZE });
+      setUsers(rows);
+      setTotalCount(total);
+      if (targetPage === 1) {
+        const depts = Array.from(new Set(rows.map((u) => u.department).filter((d): d is string => Boolean(d)))).sort();
+        setDepartments(depts);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể tải người dùng');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getUsers()
-      .then((data) => setUsers(data as User[]))
-      .finally(() => setLoading(false));
+    let ignore = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const { rows, total } = await getUsers({ limit: PAGE_SIZE, offset: 0 });
+        if (ignore) return;
+        setUsers(rows);
+        setTotalCount(total);
+        setSelected(rows[0] ?? null);
+        setDepartments(Array.from(new Set(rows.map((u) => u.department).filter((d): d is string => Boolean(d)))).sort());
+      } catch (err: unknown) {
+        if (!ignore) setError(err instanceof Error ? err.message : 'Không thể tải người dùng');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    })();
+    return () => { ignore = true; };
   }, []);
 
   const filteredUsers = useMemo(() => {
-    const keyword = query.toLowerCase();
+    const term = search.trim().toLowerCase();
     return users.filter((user) => {
-      return (
-        user.id.toLowerCase().includes(keyword) ||
-        user.account.toLowerCase().includes(keyword) ||
-        user.department?.toLowerCase().includes(keyword)
-      );
+      const score = user.riskScore ?? 0;
+      const matchesSearch = !term || [user.name, user.account, user.department, user.role]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term));
+      const matchesDepartment = department === 'all' || user.department === department;
+      const matchesRisk = riskLevel === 'all'
+        || (riskLevel === 'high' && score >= 70)
+        || (riskLevel === 'medium' && score >= 45 && score < 70)
+        || (riskLevel === 'low' && score < 45);
+      return matchesSearch && matchesDepartment && matchesRisk;
     });
-  }, [users, query]);
+  }, [department, riskLevel, search, users]);
 
-  if (loading) return <LoadingState message="Loading users..." />;
+  const activeSelected = selected && filteredUsers.some((user) => user.account === selected.account)
+    ? selected
+    : filteredUsers[0] ?? null;
+
+  function resetFilters() {
+    setSearch('');
+    setDepartment('all');
+    setRiskLevel('all');
+  }
+
+  function handlePageChange(next: number) {
+    setPage(next);
+    loadPage(next);
+  }
 
   return (
-    <section className="users-page p-6 max-w-6xl mx-auto animated-bg min-h-[calc(100vh-64px)] rounded-xl">
-      <PageHeader
-        title="Users"
-        description="Monitor user accounts, departments, status and risk score."
-      />
+    <div className="page-stack">
+      <PageHeader eyebrow="Thực thể người dùng" title="Hồ sơ rủi ro người dùng" description="Theo dõi hồ sơ chuẩn, thiết bị thường dùng, số bất thường và giải thích rủi ro." />
 
-      <div className="glass-panel hover-glow mt-6">
-        <div className="filter-bar mb-6">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search user, account, department..."
-            className="search-input bg-gray-900/50 border-gray-700/50 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 rounded-lg w-full max-w-md placeholder-gray-500 transition-all"
+      <section className="filter-panel narrow">
+        <label><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm người dùng, phòng ban, vai trò..." /></label>
+        <select value={department} onChange={(event) => setDepartment(event.target.value)}><option value="all">Tất cả phòng ban</option>{departments.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+        <select value={riskLevel} onChange={(event) => setRiskLevel(event.target.value)}><option value="all">Tất cả mức rủi ro</option>{riskLevelOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+      </section>
+
+      <section className="filter-summary"><span>Đang hiển thị {filteredUsers.length} / {totalCount} người dùng</span><button className="table-action" onClick={resetFilters}>Xóa lọc</button></section>
+
+      <section className="entity-layout">
+        <div className="panel-card">
+          {loading && <p>Đang tải người dùng...</p>}
+          {error && <p className="error-message">{error}</p>}
+          {!loading && !error && users.length === 0 && <p>Chưa có người dùng. Hãy nạp dữ liệu vào cơ sở dữ liệu.</p>}
+          {!loading && !error && users.length > 0 && filteredUsers.length === 0 && <p>Không có người dùng khớp bộ lọc.</p>}
+          <DataTable<UserEntity>
+            columns={[
+              { key: 'name', header: 'Người dùng', render: (u) => (<><strong>{u.name}</strong><span className="muted-line">{u.account}</span></>) },
+              { key: 'role', header: 'Vai trò' },
+              { key: 'department', header: 'Phòng ban' },
+              { key: 'devices', header: 'Thiết bị', align: 'right' },
+              { key: 'lastSeen', header: 'Hoạt động cuối' },
+              { key: 'baseline', header: 'Hồ sơ chuẩn', render: (u) => <span className="status-pill">{u.baseline}</span> },
+              { key: 'anomalies', header: 'Bất thường', align: 'right', sortable: true, value: (u) => u.anomalies ?? 0 },
+              { key: 'riskScore', header: 'Rủi ro', align: 'right', sortable: true, value: (u) => u.riskScore ?? 0, render: (u) => <RiskScore value={u.riskScore ?? 0} size="sm" /> },
+            ]}
+            rows={filteredUsers}
+            rowKey={(u) => u.account}
+            onRowClick={(u) => setSelected(u)}
+            selectedKey={activeSelected?.account}
+            pageSize={PAGE_SIZE}
+            total={totalCount}
+            currentPage={page}
+            onPageChange={handlePageChange}
+            emptyText="Không có người dùng khớp bộ lọc"
           />
         </div>
 
-        {filteredUsers.length === 0 ? (
-          <EmptyState title="No users found" />
-        ) : (
-          <div className="table-container shadow-2xl">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>User ID</th>
-                  <th>Account</th>
-                  <th>Department</th>
-                  <th>Status</th>
-                  <th>Risk</th>
-                  <th>Devices</th>
-                  <th>Open Alerts</th>
-                  <th>Last Seen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className="font-mono text-purple-300 font-medium">{user.id}</td>
-                    <td className="font-semibold text-white">{user.account}</td>
-                    <td><span className="bg-gray-800/60 px-2 py-1 rounded text-gray-300">{user.department ?? '-'}</span></td>
-                    <td><StatusBadge status={user.status} /></td>
-                    <td><RiskScore value={user.riskScore ?? 0} /></td>
-                    <td className="text-gray-300">{user.assignedDevices ?? 0}</td>
-                    <td>
-                      {user.openAlerts && user.openAlerts > 0 ? (
-                        <span className="text-red-400 font-bold bg-red-900/30 px-2 py-1 rounded-full">{user.openAlerts}</span>
-                      ) : (
-                        <span className="text-gray-500">0</span>
-                      )}
-                    </td>
-                    <td className="text-gray-400">{formatDate(user.lastSeen)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {activeSelected && <aside className="detail-panel profile-panel">
+          <div className="detail-icon"><UserRoundCheck size={24} /></div>
+          <span className="eyebrow">Hồ sơ chuẩn</span>
+          <h2>{activeSelected.name}</h2>
+          <p>{activeSelected.explanation}</p>
+          <div className="profile-grid">
+            <div><span>Giờ đăng nhập thường lệ</span><strong>{activeSelected.loginHours}</strong></div>
+            <div><span>Thiết bị phổ biến</span><strong>{activeSelected.commonDevices}</strong></div>
+            <div><span>Số bất thường</span><strong>{activeSelected.anomalies}</strong></div>
+            <div><span>Trạng thái hồ sơ chuẩn</span><strong>{activeSelected.baseline}</strong></div>
           </div>
-        )}
-      </div>
-    </section>
+        </aside>}
+      </section>
+    </div>
   );
 }

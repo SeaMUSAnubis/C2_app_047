@@ -1,90 +1,60 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../store/authStore';
-import { mockAdmin, mockAnalyst } from '../mocks/mockData';
-import { Activity } from 'lucide-react';
+import { Activity, LockKeyhole } from 'lucide-react';
+import { login as loginRequest } from '../lib/apiClient';
+import { useAuth } from '../store/useAuth';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@demo.com');
+  const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  async function handleLogin(event: React.FormEvent) {
+    event.preventDefault();
     setError('');
     setLoading(true);
-
-    // Simulate API delay
-    await new Promise(r => setTimeout(r, 500));
-
-    if (email === 'admin@demo.com' && password === 'password123') {
-      login(mockAdmin, 'fake-jwt-token-admin');
-      navigate('/dashboard');
-    } else if (email === 'analyst@demo.com' && password === 'password123') {
-      login(mockAnalyst, 'fake-jwt-token-analyst');
-      navigate('/dashboard');
-    } else {
-      setError('Invalid email or password');
+    try {
+      const session = await loginRequest(email, password);
+      login(session.user, session.accessToken);
+      navigate(session.user.role === 'employee' ? '/my-risk' : '/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể đăng nhập. Vui lòng kiểm tra tài khoản.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-surface p-8 rounded-xl shadow-2xl border border-border">
-        <div className="flex justify-center mb-6">
-          <div className="bg-primary/20 p-3 rounded-full">
-            <Activity className="w-10 h-10 text-primary" />
-          </div>
+    <main className="login-screen">
+      <section className="login-hero">
+        <div className="brand-block large">
+          <div className="brand-mark"><Activity size={24} /></div>
+          <div><strong>Vespionage</strong><span>UEBA Console</span></div>
         </div>
-        <h1 className="text-2xl font-bold text-center text-white mb-2">Vespionage UEBA</h1>
-        <p className="text-slate-400 text-center mb-8">Sign in to your account</p>
-        
-        {error && <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-md mb-4 text-sm">{error}</div>}
-        
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full bg-background border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary transition-colors"
-              placeholder="admin@demo.com"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-background border border-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary transition-colors"
-              placeholder="password123"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary hover:bg-blue-600 text-white font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+        <h1>Phát hiện mối đe dọa nội bộ bằng UEBA &amp; Machine Learning</h1>
+        <p>Giám sát hành vi người dùng và thiết bị, phát hiện lệch hồ sơ chuẩn và cảnh báo bất thường theo thời gian thực.</p>
+        <div className="login-signal"><span>OCSVM</span><span>Phát hiện bất thường</span><span>Sẵn sàng tích hợp SIEM</span></div>
+      </section>
 
-        <div className="mt-6 pt-6 border-t border-border">
-          <p className="text-sm text-slate-400 mb-2">Demo Accounts:</p>
-          <div className="text-xs text-slate-500 space-y-1">
-            <p>Admin: admin@demo.com / password123</p>
-            <p>Analyst: analyst@demo.com / password123</p>
-          </div>
+      <form className="login-card" onSubmit={handleLogin}>
+        <div className="detail-icon"><LockKeyhole size={24} /></div>
+        <h2>Đăng nhập hệ thống</h2>
+        <p>Đăng nhập để truy cập bảng điều khiển demo.</p>
+        {error && <div className="form-error">{error}</div>}
+        <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+        <label>Mật khẩu<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+        <button className="primary-action full" type="submit" disabled={loading}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button>
+        <div className="demo-accounts">
+          <strong>Tài khoản demo</strong>
+          <span>Quản trị: admin@demo.com / admin123</span>
+          <span>Quản lý bảo mật: security@demo.com / security123</span>
+          <span>Phân tích viên: analyst@demo.com / analyst123</span>
+          <span>Nhân viên: employee@demo.com / employee123</span>
         </div>
-      </div>
-    </div>
+      </form>
+    </main>
   );
 }

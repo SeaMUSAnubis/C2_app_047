@@ -1,96 +1,155 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { HardDrive, Search } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
-import { LoadingState } from '../components/common/LoadingState';
-import { EmptyState } from '../components/common/EmptyState';
-import { RiskScore } from '../components/common/RiskScore';
-import { StatusBadge } from '../components/common/StatusBadge';
+import { DataTable } from '../components/security/DataTable';
+import { RiskScore } from '../components/security/RiskScore';
 import { getDevices } from '../lib/apiClient';
-import { formatDate } from '../lib/format';
-import type { Device } from '../types/device';
+import type { DeviceEntity } from '../types/security';
+
+const PAGE_SIZE = 25;
 
 export function DevicesPage() {
-  const [devices, setDevices] = useState<Device[]>([]);
+  const [devices, setDevices] = useState<DeviceEntity[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [osOptions, setOsOptions] = useState<string[]>([]);
+  const [postureOptions, setPostureOptions] = useState<string[]>([]);
+  const [selected, setSelected] = useState<DeviceEntity | null>(null);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [posture, setPosture] = useState('all');
+  const [os, setOs] = useState('all');
+  const [page, setPage] = useState(1);
+
+  const loadPage = useCallback(async (targetPage: number) => {
+    setLoading(true);
+    setError('');
+    try {
+      const { rows, total } = await getDevices({ limit: PAGE_SIZE, offset: (targetPage - 1) * PAGE_SIZE });
+      setDevices(rows);
+      setTotalCount(total);
+      if (targetPage === 1) {
+        setOsOptions(Array.from(new Set(rows.map((d) => d.os).filter((v): v is string => Boolean(v)))).sort());
+        setPostureOptions(Array.from(new Set(rows.map((d) => d.posture ?? d.status).filter((v): v is string => Boolean(v)))).sort());
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể tải thiết bị');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getDevices()
-      .then((data) => setDevices(data as Device[]))
-      .finally(() => setLoading(false));
+    let ignore = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const { rows, total } = await getDevices({ limit: PAGE_SIZE, offset: 0 });
+        if (ignore) return;
+        setDevices(rows);
+        setTotalCount(total);
+        setSelected(rows[0] ?? null);
+        setOsOptions(Array.from(new Set(rows.map((d) => d.os).filter((v): v is string => Boolean(v)))).sort());
+        setPostureOptions(Array.from(new Set(rows.map((d) => d.posture ?? d.status).filter((v): v is string => Boolean(v)))).sort());
+      } catch (err: unknown) {
+        if (!ignore) setError(err instanceof Error ? err.message : 'Không thể tải thiết bị');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    })();
+    return () => { ignore = true; };
   }, []);
 
   const filteredDevices = useMemo(() => {
-    const keyword = query.toLowerCase();
+    const term = search.trim().toLowerCase();
     return devices.filter((device) => {
-      return (
-        device.id.toLowerCase().includes(keyword) ||
-        device.hostname.toLowerCase().includes(keyword) ||
-        device.department?.toLowerCase().includes(keyword) ||
-        device.assignedUser?.toLowerCase().includes(keyword)
-      );
+      const matchesSearch = !term || [device.id, device.hostname, device.owner, device.assignedUser, device.ip, device.os]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term));
+      const matchesPosture = posture === 'all' || device.posture === posture || device.status === posture;
+      const matchesOs = os === 'all' || device.os === os;
+      return matchesSearch && matchesPosture && matchesOs;
     });
-  }, [devices, query]);
+  }, [devices, os, posture, search]);
 
-  if (loading) return <LoadingState message="Loading devices..." />;
+  const activeSelected = selected && filteredDevices.some((device) => device.id === selected.id)
+    ? selected
+    : filteredDevices[0] ?? null;
+
+  function resetFilters() {
+    setSearch('');
+    setPosture('all');
+    setOs('all');
+  }
+
+  function handlePageChange(next: number) {
+    setPage(next);
+    loadPage(next);
+  }
 
   return (
-    <section className="devices-page p-6 max-w-6xl mx-auto animated-bg min-h-[calc(100vh-64px)] rounded-xl">
-      <PageHeader
-        title="Devices"
-        description="Monitor endpoint devices and their risk levels."
-      />
+    <div className="page-stack">
+      <PageHeader eyebrow="Kiểm kê thiết bị" title="Thiết bị và tình trạng rủi ro" description="Theo dõi chủ sở hữu, hệ điều hành, IP, tình trạng bảo mật và số sự kiện đáng ngờ." />
 
-      <div className="glass-panel hover-glow mt-6">
-        <div className="filter-bar mb-6">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search hostname, department, user..."
-            className="search-input bg-gray-900/50 border-gray-700/50 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 rounded-lg w-full max-w-md placeholder-gray-500 transition-all"
+      <section className="filter-panel narrow">
+        <label><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm tên máy, chủ sở hữu, IP..." /></label>
+        <select value={posture} onChange={(event) => setPosture(event.target.value)}><option value="all">Tất cả tình trạng</option>{postureOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+        <select value={os} onChange={(event) => setOs(event.target.value)}><option value="all">Tất cả hệ điều hành</option>{osOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+      </section>
+
+      <section className="filter-summary"><span>Đang hiển thị {filteredDevices.length} / {totalCount} thiết bị</span><button className="table-action" onClick={resetFilters}>Xóa lọc</button></section>
+
+      <section className="entity-layout">
+        <div className="panel-card">
+          {loading && <p>Đang tải thiết bị...</p>}
+          {error && <p className="error-message">{error}</p>}
+          {!loading && !error && devices.length === 0 && <p>Chưa có thiết bị. Hãy nạp dữ liệu vào cơ sở dữ liệu.</p>}
+          {!loading && !error && devices.length > 0 && filteredDevices.length === 0 && <p>Không có thiết bị khớp bộ lọc.</p>}
+
+          <DataTable<DeviceEntity>
+            columns={[
+              { key: 'id', header: 'Thiết bị', render: (d) => <code>{d.id}</code> },
+              { key: 'owner', header: 'Chủ sở hữu', render: (d) => d.owner ?? d.assignedUser ?? 'Chưa gán' },
+              { key: 'os', header: 'Hệ điều hành', render: (d) => d.os ?? 'Không rõ' },
+              { key: 'ip', header: 'IP', render: (d) => d.ip ?? '-' },
+              { key: 'lastSeen', header: 'Hoạt động cuối' },
+              { key: 'suspiciousEvents', header: 'Sự kiện đáng ngờ', align: 'right', sortable: true, value: (d) => d.suspiciousEvents ?? 0 },
+              { key: 'posture', header: 'Tình trạng', render: (d) => <span className="status-pill">{d.posture ?? d.status}</span> },
+              { key: 'riskScore', header: 'Rủi ro', align: 'right', sortable: true, value: (d) => d.riskScore ?? 0, render: (d) => <RiskScore value={d.riskScore ?? 0} size="sm" /> },
+            ]}
+            rows={filteredDevices}
+            rowKey={(d) => d.id}
+            onRowClick={(d) => setSelected(d)}
+            selectedKey={activeSelected?.id}
+            pageSize={PAGE_SIZE}
+            total={totalCount}
+            currentPage={page}
+            onPageChange={handlePageChange}
+            emptyText="Không có thiết bị khớp bộ lọc"
           />
         </div>
 
-        {filteredDevices.length === 0 ? (
-          <EmptyState title="No devices found" />
-        ) : (
-          <div className="table-container shadow-2xl">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Device ID</th>
-                  <th>Hostname</th>
-                  <th>Assigned User</th>
-                  <th>Department</th>
-                  <th>Status</th>
-                  <th>Risk</th>
-                  <th>Open Alerts</th>
-                  <th>Last Seen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDevices.map((device) => (
-                  <tr key={device.id}>
-                    <td className="font-mono text-blue-300">{device.id}</td>
-                    <td className="font-semibold text-white">{device.hostname}</td>
-                    <td>{device.assignedUser ?? '-'}</td>
-                    <td><span className="bg-gray-800/60 px-2 py-1 rounded text-gray-300">{device.department ?? '-'}</span></td>
-                    <td><StatusBadge status={device.status} /></td>
-                    <td><RiskScore value={device.riskScore ?? 0} /></td>
-                    <td>
-                      {device.openAlerts && device.openAlerts > 0 ? (
-                        <span className="text-red-400 font-bold bg-red-900/30 px-2 py-1 rounded-full">{device.openAlerts}</span>
-                      ) : (
-                        <span className="text-gray-500">0</span>
-                      )}
-                    </td>
-                    <td className="text-gray-400">{formatDate(device.lastSeen)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {activeSelected && <aside className="detail-panel profile-panel">
+          <div className="detail-icon"><HardDrive size={24} /></div>
+          <span className="eyebrow">Chi tiết thiết bị</span>
+          <h2>{activeSelected.hostname ?? activeSelected.id}</h2>
+          <p>{activeSelected.id} thuộc {activeSelected.owner ?? activeSelected.assignedUser ?? 'người dùng chưa xác định'} với tình trạng {activeSelected.posture ?? activeSelected.status ?? 'chưa rõ'}.</p>
+          <div className="profile-grid">
+            <div><span>Hệ điều hành</span><strong>{activeSelected.os ?? 'Không rõ'}</strong></div>
+            <div><span>IP</span><strong>{activeSelected.ip ?? '-'}</strong></div>
+            <div><span>Hoạt động cuối</span><strong>{activeSelected.lastSeen ?? '-'}</strong></div>
+            <div><span>Sự kiện đáng ngờ</span><strong>{activeSelected.suspiciousEvents ?? 0}</strong></div>
           </div>
-        )}
-      </div>
-    </section>
+          <h3>Đánh giá tình trạng</h3>
+          <p>Thiết bị này đang được ưu tiên theo điểm rủi ro và số sự kiện bất thường lấy trực tiếp từ cơ sở dữ liệu.</p>
+          <h3>Hành động gợi ý <span className="hint-tag">(chung)</span></h3>
+          <ul>
+            <li>Kiểm tra phiên đăng nhập gần nhất và IP nguồn.</li>
+            <li>Đối chiếu chủ sở hữu với hồ sơ chuẩn của người dùng.</li>
+            <li>Ưu tiên cô lập nếu điểm rủi ro vượt mức cao.</li>
+          </ul>
+        </aside>}
+      </section>
+    </div>
   );
 }

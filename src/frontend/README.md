@@ -1,37 +1,45 @@
-# Vespionage UEBA Frontend Dashboard
+# Giao diện dashboard Vespionage UEBA
 
-## 1. Product Overview
+## 1. Tổng quan sản phẩm
 
-Frontend dashboard for Vespionage / UEBA Endpoint Monitoring.
-It visualizes users, devices, normalized logs, anomaly alerts, risk scores, timelines, explanations, and admin website blocklist actions.
+Đây là frontend dashboard cho hệ thống Vespionage / UEBA Endpoint Monitoring. Giao diện hiển thị người dùng, thiết bị, log đã chuẩn hóa, cảnh báo bất thường, điểm rủi ro, timeline, phần giải thích và thao tác quản trị danh sách website bị chặn.
 
-## 2. Roles
+## 2. Vai trò người dùng
 
-* **Analyst**: Can view dashboards, investigate alerts, view users/devices/logs, and see explanations. Analyst can only view or suggest/request block action.
-* **Admin**: Has all Analyst capabilities. In addition, **Admin can add suspicious URLs/domains to the blocked websites list.**
+- **Admin**: toàn quyền — xem mọi trang, quản account, model, dataset, blocked websites (thêm/sửa/xóa).
+- **Quản lý bảo mật (security_manager)**: xem toàn bộ alerts/users/devices/logs, đổi status alert, ingest data, chạy phân tích toàn bộ, quản lý website bị chặn (thêm/sửa, không xóa). Không quản account/user-device CRUD.
+- **Phân tích viên (analyst)**: xem/đổi status alert, xem users/devices/logs, ingest log đơn lẻ, thử ML. Không chạy phân tích toàn bộ, không import dataset, không quản blocked websites.
+- **Nhân viên (employee)**: chỉ xem hồ sơ rủi ro cá nhân (`/my-risk`) + kiểm thử ML. Không thấy dữ liệu của người khác.
 
-## 3. Pages and routes
+## 3. Trang và route
 
-* `/login` - Authentication page
-* `/dashboard` - High-level metrics and risk distribution
-* `/alerts` - Alert list with filters
-* `/alerts/:id` - Deep dive into an alert (Timeline, Explanation, Actions)
-* `/users` - User list and risk scores
-* `/users/:id` - User profile and activity
-* `/devices` - Device list and risk scores
-* `/devices/:id` - Device details
-* `/logs` - Raw normalized endpoint logs
-* `/admin/blocked-websites` - Admin-only interface to manage blocklist
+- `/login`: trang đăng nhập.
+- `/dashboard`: chỉ số tổng quan và phân bố rủi ro (admin/security_manager/analyst).
+- `/alerts`: danh sách cảnh báo có filter (admin/security_manager/analyst).
+- `/users`: danh sách người dùng và điểm rủi ro (admin/security_manager/analyst).
+- `/devices`: danh sách thiết bị và điểm rủi ro (admin/security_manager/analyst).
+- `/logs`: log endpoint đã chuẩn hóa (admin/security_manager/analyst).
+- `/model-test`: kiểm thử suy luận ML (mọi role).
+- `/my-risk`: hồ sơ rủi ro cá nhân (employee, các role khác cũng xem được).
+- `/admin/blocked-websites`: quản trị website bị chặn (admin/security_manager).
+- `/admin/accounts`: quản trị tài khoản hệ thống (admin).
 
-## 4. Environment variables
+## 4. Biến môi trường
 
-Create a `.env` file in the `frontend` directory:
-```
+Khi chạy frontend bằng Vite local, tạo file `.env` trong `src/frontend/`:
+
+```env
 VITE_API_BASE_URL=http://localhost:8000/api
 VITE_USE_MOCKS=true
 ```
 
-## 5. How to run
+Khi chạy Docker một container ở root project, frontend được build với:
+
+```env
+VITE_API_BASE_URL=/api
+```
+
+## 5. Cách chạy local
 
 ```bash
 cd src/frontend
@@ -39,20 +47,18 @@ npm install
 npm run dev
 ```
 
-## 6. Demo accounts
+## 6. Tài khoản demo
 
-When `VITE_USE_MOCKS=true`, you can use the following mock accounts:
-```
-Admin:
-email: admin@demo.com
-password: password123
+Khi `VITE_USE_MOCKS=true`, có thể dùng tài khoản mock sau:
 
-Analyst:
-email: analyst@demo.com
-password: password123
+```text
+Admin:            admin@demo.com / admin123
+Security Manager: security@demo.com / security123
+Analyst:          analyst@demo.com / analyst123
+Employee:         employee@demo.com / employee123
 ```
 
-## 7. API contract for backend
+## 7. Hợp đồng API backend
 
 ```http
 POST /api/auth/login
@@ -90,9 +96,10 @@ PATCH /api/admin/blocked-websites/:id
 DELETE /api/admin/blocked-websites/:id
 ```
 
-## 8. Expected response schemas
+## 8. Schema response dự kiến
 
 **Login Response:**
+
 ```json
 {
   "access_token": "demo-token",
@@ -107,6 +114,7 @@ DELETE /api/admin/blocked-websites/:id
 ```
 
 **Dashboard Summary:**
+
 ```json
 {
   "total_users": 120,
@@ -120,23 +128,24 @@ DELETE /api/admin/blocked-websites/:id
 ```
 
 **Alert Explanation:**
+
 ```json
 {
   "alert_id": "ALERT-1021",
-  "summary": "The user showed abnormal external web access outside normal working hours.",
+  "summary": "Người dùng có truy cập web bên ngoài bất thường ngoài giờ làm việc.",
   "why_suspicious": [
-    "The activity happened outside the user's historical baseline.",
-    "The user accessed multiple external domains in a short time window."
+    "Hoạt động xảy ra ngoài baseline lịch sử của người dùng.",
+    "Người dùng truy cập nhiều domain ngoài trong thời gian ngắn."
   ],
   "evidence": [
-    "Risk score is 87/100.",
-    "Top anomalous feature: after_hours_http_count."
+    "Điểm rủi ro là 87/100.",
+    "Feature bất thường nổi bật: after_hours_http_count."
   ],
-  "baseline_comparison": "The user normally has low HTTP activity after working hours.",
+  "baseline_comparison": "Người dùng thường có mức HTTP activity thấp ngoài giờ làm việc.",
   "recommended_action": [
-    "Review the timeline.",
-    "Check whether the domain is business-related.",
-    "Escalate or block the domain if confirmed suspicious."
+    "Xem lại timeline.",
+    "Kiểm tra domain có phục vụ công việc hay không.",
+    "Escalate hoặc block domain nếu xác nhận đáng ngờ."
   ],
   "generated_by": "rule_based"
 }
@@ -144,21 +153,21 @@ DELETE /api/admin/blocked-websites/:id
 
 ## 9. Mock mode
 
-* Khi backend chưa chạy, frontend dùng mock data (`VITE_USE_MOCKS=true`).
-* Khi backend sẵn sàng, set env để gọi API thật.
-* Không sửa component khi chuyển mock sang API thật.
+- Khi backend chưa chạy, frontend có thể dùng mock data với `VITE_USE_MOCKS=true`.
+- Khi backend sẵn sàng, đổi env để gọi API thật.
+- Không cần sửa component khi chuyển từ mock sang API thật.
 
-## 10. Backend integration notes
+## 10. Ghi chú tích hợp backend
 
-* JWT auth trả về role
-* Admin-only endpoint cho blocked websites
-* Alert endpoint có suspicious_urls
-* Alert detail có timeline
-* Explanation có thể là LLM hoặc rule_based fallback
-* Risk score luôn trong khoảng 0-100
-* Severity enum thống nhất: low/medium/high/critical
-* Status enum thống nhất: new/investigating/resolved/false_positive
+- JWT auth trả về role.
+- Admin-only endpoint dùng cho blocked websites.
+- Alert endpoint có `suspicious_urls`.
+- Alert detail có timeline.
+- Explanation có thể đến từ LLM hoặc fallback rule-based.
+- Risk score luôn nằm trong khoảng 0-100.
+- Severity enum thống nhất: `low`, `medium`, `high`, `critical`.
+- Status enum thống nhất: `new`, `investigating`, `resolved`, `false_positive`.
 
-## 11. Privacy note
+## 11. Ghi chú riêng tư
 
-This dashboard is for demo/security monitoring purposes. It should display endpoint security metadata only and avoid exposing sensitive personal content.
+Dashboard chỉ dùng cho demo/security monitoring. Giao diện chỉ nên hiển thị metadata bảo mật endpoint và tránh lộ nội dung cá nhân nhạy cảm.

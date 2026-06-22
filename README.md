@@ -1,290 +1,209 @@
-# O47 Insider Threat Detection System
+# UEBA Endpoint Monitoring
 
-Hệ thống phân tích hành vi người dùng và phân tích rủi ro nội bộ (UEBA - User and Entity Behavior Analytics) kết hợp giữa Machine Learning (OCSVM) và Large Language Models (LLMs) để đưa ra giải thích thân thiện cho chuyên gia bảo mật.
+UEBA Endpoint Monitoring là web app phát hiện hành vi bất thường của user/device từ log endpoint theo hướng insider threat và account compromise. Hệ thống dùng CERT r4.2-style logs để preprocessing, train OCSVM (One-Class SVM) model, sinh anomaly score / risk context, kết hợp LLM giải thích alert và tích hợp dashboard + backend API + endpoint agent chạy trên máy nhân viên.
 
 ## Cấu trúc repo
 
 ```text
 C2-App-047/
-├── src/                          # Backend + Frontend source code
-│   ├── main.py                   # FastAPI app entry point
-│   ├── config.py                 # App settings
-│   ├── api/                      # FastAPI routes
-│   │   └── routes.py             # All API endpoints
-│   ├── models/                   # Pydantic schemas
-│   │   └── schemas.py            # Request/response models
-│   ├── services/                 # Business logic
-│   │   ├── auth.py               # JWT auth
-│   │   ├── database.py           # PostgreSQL CRUD
-│   │   ├── llm.py                # LLM integration
-│   │   └── ueba_ml/              # ML pipelines
-│   │       ├── inference.py      # OCSVM inference
-│   │       └── pipelines/        # Preprocessing, training
-│   └── frontend/                 # React + Vite frontend
-│       ├── src/                  # React source
-│       ├── package.json          # Node dependencies
-│       ├── Dockerfile            # Frontend Docker image
-│       └── nginx.conf            # Nginx proxy config
-│
-├── tests/                        # pytest test suite
-├── docs/                         # Documentation
-├── scripts/                      # Helper scripts
-├── weights/                      # ML model artifacts
-├── data/                         # Local data (không commit)
-├── artifacts/                    # ML outputs (không commit)
-│
-├── docker-compose.yml            # Docker services
-├── Dockerfile                    # Backend Docker image
-├── Makefile                      # Common commands
-├── requirements.txt              # Python dependencies
-└── .env.example                  # Environment variables template
+├── src/
+│   ├── frontend/                 # React + Vite + TypeScript
+│   ├── backend/                  # FastAPI app, backend tests, Dockerfile backend riêng
+│   │   ├── app/
+│   │   │   ├── main.py            # FastAPI entrypoint
+│   │   │   ├── config.py          # App settings
+│   │   │   ├── api/               # API routes
+│   │   │   ├── core/              # Auth/security helpers
+│   │   │   ├── db/                # Runtime DB helpers
+│   │   │   ├── schemas/           # Pydantic schemas
+│   │   │   ├── services/          # Backend business logic
+│   │   │   └── agents/            # LLM alert-explanation graph
+│   │   └── tests/                 # Backend pytest suite
+│   ├── database/                 # PostgreSQL schema, seed, migration, data utilities
+│   ├── ml/                       # ML services, weights, scripts
+│   │   ├── services/ueba_ml/     # OCSVM inference và pipeline ML đã giữ lại
+│   │   ├── weights/               # Model weight
+│   │   └── legacy_review/         # File cần review thủ công
+│   └── agent/                    # Endpoint agent (Phase 2) — chạy trên máy nhân viên
+│       ├── collectors/            # logon (wtmp) + http (blocklist)
+│       ├── buffer.py              # SQLite local queue
+│       ├── transport.py           # HTTPS + X-API-Key auth
+│       └── service.py             # main loop
+├── docs/                          # PRD, architecture, API/data contract, references, guide
+├── scripts/                       # Docker entrypoint, AI logging helpers
+├── data/                          # CERT r4.2 raw + sample
+├── artifacts/                     # Model + feature matrix outputs
+├── eval/                          # Evaluation evidence and reports
+├── presentation/                  # Demo Day slides/assets
+├── .github/                       # CI/CD workflows + AI logging hooks
+├── docker-compose.yml             # Một container duy nhất (Postgres + API + frontend)
+├── Dockerfile
+├── Makefile
+├── requirements.txt
+├── .env.example
+└── docs/PLAN.md                   # Bản kế hoạch triển khai 4 phase (Phase 1, 2 done; 3, 4 pending)
 ```
 
-## Setup Instructions
+Chi tiết chuẩn thư mục nằm ở [docs/REPO_STRUCTURE_STANDARD.md](docs/REPO_STRUCTURE_STANDARD.md).
 
-### Yêu cầu hệ thống
-- Python 3.10+
-- Node.js 18+
-- Dữ liệu CERT r4.2 đặt tại `d:\2 Code\TEAM_O47\Data`
-- Model weight đặt tại `d:\2 Code\TEAM_O47\Weight`
+## Tính năng đã có (Phase 1 + Phase 2)
 
-### Cài đặt Backend
+### Backend (`src/backend/`)
+- **REST API** FastAPI: `/api/auth/login`, `/api/users`, `/api/devices`, `/api/logs`, `/api/alerts`, `/api/dashboard/summary`, `/api/ml/*`, `/api/demo/*`.
+- **Endpoint agent infrastructure** (Phase 1): admin cấp enrollment token → agent enroll → nhận `agent_id` + `api_key` → gửi raw-log bằng `X-API-Key`. Quản lý agent qua `/api/agents/*`, blocklist qua `/api/agents/blocklist/*`, policy qua `/api/agents/policy`.
+- **OCSVM inference** (`src/ml/services/ueba_ml/inference.py`): load model `.joblib`, chạy `run_ocsvm_inference(features)` trả về `(anomaly_score, risk_score, factors)`.
+- **Demo pipeline** (`src/backend/app/services/demo_pipeline.py`): trích feature từ events, gọi OCSVM, sinh alert.
+- **LLM alert explanation** (`src/backend/app/agents/` + `src/backend/app/services/llm.py`): graph đơn giản gọi LLM giải thích alert.
+- **Auth + RBAC**: JWT (admin / security_manager / analyst / employee), bcrypt password hash, CORS configured.
+
+### Endpoint agent (`src/agent/`)
+- **Enrollment CLI**: `python -m agent enroll --server-url ... --enrollment-token ... --state-path ...`.
+- **Run CLI**: `python -m agent run --server-url ... --state-path ...` — chạy foreground với SIGINT/SIGTERM handling.
+- **Local SQLite buffer** (WAL mode): durable, idempotent theo `source_id`, crash recovery qua `reset_in_flight()`, FIFO eviction khi vượt `max_events`.
+- **HTTPS transport**: sync `httpx.Client`, classify lỗi (2xx/4xx/5xx/network) thành `TransientError` / `PermanentError` / `AuthRevokedError`.
+- **Config client**: pull `/api/agents/me/config` mỗi 5 phút, cache blocklist + policy, exponential backoff.
+- **Collector logon (Linux)**: poll `/var/log/wtmp` (384 bytes/record), phát hiện logon/logoff, skip system events, xử lý rotation (inode change), persist offset qua restart.
+- **Collector http (DomainCheck)**: thread-safe queue, mỗi domain/URL được check qua blocklist, domain extraction cho URL, DNS query parser với defensive cap.
+- **Collector http (DnsSniff, root required)**: bind UDP/53, parse DNS query thủ công, emit event mỗi query.
+- **Legal banner** in lúc khởi động, state file mode 0600.
+
+### Frontend (`src/frontend/`)
+- React + Vite + TypeScript SPA.
+- Trang: Dashboard, Users, Devices, Logs, Alerts, Models, Admin Blocked Websites, Login.
+- Gọi `/api/*` qua `apiClient.ts`, JWT-based auth.
+
+## Data
+
+Repo tách dữ liệu theo vòng đời:
+
+- `data/raw/cert-r4.2/`: raw CERT r4.2 dataset, local only, không commit.
+- `data/sample/cert-r4.2-small/`: sample nhỏ để smoke test/demo nhanh, local only.
+- `artifacts/`: feature matrix, model binary, scores, local/generated.
+- Schema và data contract nằm trong [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md).
+
+## Chạy bằng Docker (khuyến nghị cho demo)
+
 ```bash
-# 1. Chuyển vào thư mục dự án
-cd "d:\2 Code\TEAM_O47\C2-App-047"
+docker compose up --build -d
+```
 
-# 2. Tạo môi trường ảo (nếu chưa có) và cài đặt dependencies
+Sau khi build xong, mở:
+
+| Thành phần | URL |
+|---|---|
+| Frontend (UI) | http://localhost:5173 |
+| Health check | http://localhost:5173/health |
+| API cho frontend | http://localhost:5173/api/* |
+| Swagger / OpenAPI | http://localhost:5173/docs |
+
+Lệnh hữu ích:
+
+```bash
+docker compose logs -f app       # xem log
+docker compose ps                # trạng thái container
+docker compose down              # dừng (giữ volume DB)
+docker compose down -v           # dừng + xóa volume DB
+```
+
+## Chạy tách riêng khi development
+
+```bash
+# Backend
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# 3. Khởi chạy FastAPI server
-uvicorn src.main:app --reload --port 8000
-```
-
-### Cài đặt Frontend
-```bash
-# 1. Chuyển vào thư mục frontend
-cd "d:\2 Code\TEAM_O47\C2-App-047\src\frontend"
-
-# 2. Cài đặt các gói thư viện
-npm install
-
-# 3. Chạy Vite dev server
-npm run dev
-```
-
-## 3. Environment Variables (Env Vars)
-
-### Backend `.env`
-Tạo file `.env` tại thư mục gốc backend:
-```env
-APP_NAME="O47 UEBA System"
-APP_VERSION="1.0.0"
-CORS_ORIGINS="http://localhost:5173"
-JWT_SECRET="your-secret-key-here"
-```
-
-### Frontend `.env`
-Tạo file `.env` tại thư mục `src/frontend`:
-```env
-VITE_API_BASE_URL=http://localhost:8000/api
-```
-
-Output chính:
-
-- `artifacts/preprocessing/iforest_feature_matrix.csv`
-- `artifacts/preprocessing/iforest_feature_columns.json`
-- `artifacts/models/iforest_model.joblib`
-- `artifacts/models/iforest_metadata.json`
-- `artifacts/models/iforest_anomaly_scores.csv`
-- `artifacts/evaluation/iforest_feature_lift.csv`
-- `eval/results/preprocessing_report.md`
-- `eval/results/iforest_training_report.md`
-
-## Chạy project
-
-### Ports
-
-| Service | Port | URL |
-|---------|------|-----|
-| Frontend (Vite) | 5173 | http://localhost:5173 |
-| Backend API (FastAPI) | 8000 | http://localhost:8000 |
-| PostgreSQL | 5432 | localhost:5432 |
-
-### Cách 1: Chạy bằng Docker (Khuyến nghị)
-
-Docker sẽ khởi động cả Frontend + Backend API + PostgreSQL cùng lúc.
-
-```bash
-# Khởi động tất cả services
-docker compose up -d
-
-# Xem logs
-docker compose logs -f
-
-# Dừng services
-docker compose down
-
-# Rebuild sau khi sửa code
-docker compose up -d --build
-```
-
-Truy cập ứng dụng tại http://localhost:5173
-
-### Cách 2: Chạy tách riêng từng service
-
-#### 1. Database (PostgreSQL)
-
-```bash
-# Khởi động PostgreSQL bằng Docker
-docker compose up -d db
-
-# Verify database đang chạy
-docker compose ps
-```
-
-#### 2. Backend API (FastAPI)
-
-```bash
-# Tạo virtual environment (lần đầu)
-python -m venv .venv
-source .venv/bin/activate        # Linux/Mac
-# .venv\Scripts\activate         # Windows
-
-# Cài dependencies (lần đầu)
-pip install -r requirements.txt
-
-# Tạo file .env từ template (lần đầu)
 cp .env.example .env
+# Sửa DATABASE_URL trong .env trỏ tới PostgreSQL local
+uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 
-# Chạy Backend API
-uvicorn src.main:app --reload --port 8000
-
-# Hoặc dùng Makefile
-make run
+# Frontend
+cd src/frontend
+npm install
+npm run dev     # http://localhost:5173
 ```
 
-Backend API chạy trên http://localhost:8000
-
-API docs (Swagger): http://localhost:8000/docs
-
-#### 3. Frontend (React + Vite)
+## Test
 
 ```bash
-# Vào thư mục frontend
-cd src/frontend
+# Backend (cần PostgreSQL nếu chạy integration test)
+pytest src/backend/tests -q
 
-# Cài dependencies (lần đầu)
-npm install
-
-# Chạy dev server
-npm run dev
+# Agent
+pytest src/agent/tests -q
 ```
 
-Frontend chạy trên http://localhost:5173
-
-## Ports
-
-| Service | Port | URL |
-|---------|------|-----|
-| Frontend (Vite/Nginx) | 5173 | http://localhost:5173 |
-| Backend API (FastAPI) | 8000 | http://localhost:8000 |
-| PostgreSQL | 5432 | localhost:5432 |
-
-## Tài khoản mặc định
+## Tài khoản demo
 
 | Email | Password | Role |
-|-------|----------|------|
+|---|---|---|
 | admin@demo.com | admin123 | admin |
+| security@demo.com | security123 | security_manager |
 | analyst@demo.com | analyst123 | analyst |
-
-## Environment Variables
-
-Xem `.env.example` để biết các biến môi trường cần thiết:
-
-```bash
-# Database
-DATABASE_URL=postgresql://ueba:ueba@localhost:5432/ueba
-
-# JWT
-JWT_SECRET=change-me-in-production
-JWT_EXPIRES_MINUTES=480
-
-# CORS (Frontend URL)
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-
-# ML Model
-OCSVM_MODEL_PATH=weights/ocsvm_cert_r42_chunked.joblib
-OCSVM_MODEL_VERSION=ocsvm-cert-r42-chunked
-
-# LLM (optional)
-MISTRAL_API_KEY=
-MISTRAL_MODEL=mistral-small-latest
-```
-
-## ML Pipeline
-
-Chạy preprocessing trên sample:
-
-```bash
-python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/sample/cert-r4.2-small
-```
-
-Chạy preprocessing trên raw dataset:
-
-```bash
-python src/services/ueba_ml/pipelines/preprocess.py --input-dir data/raw/cert-r4.2 --chunksize 250000
-```
-
-Train Isolation Forest từ feature matrix:
-
-```bash
-python src/services/ueba_ml/pipelines/train.py
-```
-
-## Load dữ liệu CERT r4.2
-
-```bash
-# Load sample data vào database
-python scripts/load_cert_data.py
-```
-
-## Testing
-
-### Backend Tests
-
-```bash
-# Bật Docker (PostgreSQL)
-docker compose up -d
-
-# Activate virtual environment
-source .venv/bin/activate
-
-# Chạy tất cả tests (cần PostgreSQL)
-export TEST_DATABASE_URL="postgresql://ueba:ueba@localhost:5432/ueba"
-pytest tests/ -v
-
-# Chạy tests không cần DB
-pytest tests/ -v -k "not postgres"
-```
-
-### Frontend Tests
-
-```bash
-cd src/frontend
-
-# Chạy tất cả tests
-npm run test
-
-# Watch mode
-npm run test:watch
-```
+| employee@demo.com | employee123 | employee |
 
 ## Tài liệu
 
-- [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - Kiến trúc hệ thống
-- [docs/contracts/API_CONTRACT.md](docs/contracts/API_CONTRACT.md) - API Contract
-- [docs/contracts/DATA_CONTRACT.md](docs/contracts/DATA_CONTRACT.md) - Data Contract
-- [docs/planning/PRD.md](docs/planning/PRD.md) - Product Requirements Document
-- [docs/management/MVP_PROGRESS.md](docs/management/MVP_PROGRESS.md) - Tiến độ MVP
+- [docs/PRD.md](docs/PRD.md) — Product Requirements
+- [docs/BRIEF.md](docs/BRIEF.md) — Brief
+- [docs/UEBA_REQUIREMENTS.md](docs/UEBA_REQUIREMENTS.md) — Yêu cầu chi tiết
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Kiến trúc hệ thống
+- [docs/ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md) — Tổng quan kiến trúc
+- [docs/architecture_diagram.md](docs/architecture_diagram.md) — Sơ đồ
+- [docs/API_CONTRACT.md](docs/API_CONTRACT.md) — Hợp đồng API
+- [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md) — Hợp đồng dữ liệu
+- [docs/REPO_STRUCTURE_STANDARD.md](docs/REPO_STRUCTURE_STANDARD.md) — Chuẩn cấu trúc repo
+- [docs/UI_FLOW.svg](docs/UI_FLOW.svg) — Sơ đồ luồng UI
+- [docs/PLAN.md](docs/PLAN.md) — Kế hoạch triển khai 4 phase
+- [docs/guide/](docs/guide/) — Hướng dẫn (backend setup, v.v.)
+- [docs/references/](docs/references/) — Tài liệu tham khảo (paper, v.v.)
+- [docs/reports/](docs/reports/) — Báo cáo review, v.v.
+- [docs/management/](docs/management/) — Worklog, journal, test plan/report, MVP progress
+- [docs/refactor/](docs/refactor/) — Tài liệu refactor repo (2026-06)
+- [docs/047_UEBA.xlsx](docs/047_UEBA.xlsx) — Bảng tính dự án
+
+## ML pipeline
+
+OCSVM đã train sẵn ở `src/ml/weights/ocsvm_cert_r42_chunked.joblib`. Backend tự load khi khởi động. Nếu muốn train lại (không khuyến nghị cho demo):
+
+```bash
+bash src/ml/scripts/run_preprocessing.sh
+bash src/ml/scripts/train_model.sh
+```
+
+## Module ownership
+
+| Mảng | Thư mục | Deliverable |
+|---|---|---|
+| Product/PM | `docs/`, `docs/management/` | PRD, user story, worklog, journal |
+| Backend API | `src/backend/`, `src/database/` | FastAPI app, schemas, DB helpers, agent endpoints |
+| Data/ML | `src/ml/`, `data/`, `artifacts/`, `eval/` | OCSVM pipeline, training, scoring, reports |
+| Endpoint agent | `src/agent/` | Collector (logon/http), buffer, transport, service |
+| Frontend | `src/frontend/` | React + Vite UI |
+| QA/DevOps | `src/backend/tests/`, `src/agent/tests/`, `.github/`, `Dockerfile` | Tests, CI, container config |
+
+## AI logging hooks
+
+Repo giữ hook logging của AI20K Build Cohort 2 trong `scripts/` và các thư mục `.agents/`, `.claude/`, `.codex/`, `.cursor/`, `.gemini/`, `.github/hooks/`.
+
+Cài pre-push hook một lần:
+
+```bash
+bash scripts/setup_hooks.sh
+```
+
+Hoặc trên Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1
+```
+
+## Phase triển khai
+
+| Phase | Trạng thái | Mô tả |
+|---|---|---|
+| 1 — Server agent infrastructure | ✅ done | 4 bảng DB mới, 15 endpoint `/api/agents/*`, auth `X-API-Key`, raw-logs chấp nhận agent key |
+| 2 — Endpoint agent | ✅ done | `src/agent/` package: SQLite buffer + HTTPS transport + 2 collector (logon + http), 148 test pass |
+| 3 — Normalizer + ML scoring | ⏳ pending | Worker chuyển `raw_user_logs` → `event_logs`, near-real-time ML scoring |
+| 4 — Full collectors + UI | ⏳ pending | USB/file/email/process/network collector, UI quản lý agent, legal banner UI |
+
+Xem chi tiết: [docs/PLAN.md](docs/PLAN.md).
