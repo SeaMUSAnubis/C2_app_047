@@ -18,6 +18,24 @@ export function roleLabel(value: string): string {
   return roleLabels[value] ?? value;
 }
 
+export const eventTypeLabels: Record<string, string> = {
+  logon: 'Đăng nhập',
+  logoff: 'Đăng xuất',
+  device: 'Sử dụng thiết bị',
+  http: 'Truy cập web',
+  file: 'Truy cập tệp',
+  email: 'Gửi email',
+  process: 'Tiến trình',
+  network: 'Kết nối mạng',
+  ldap: 'LDAP',
+  psychometric: 'Tâm lý học',
+  custom: 'Tùy chỉnh',
+};
+
+export function eventTypeLabel(value: string): string {
+  return eventTypeLabels[value?.toLowerCase()] ?? value;
+}
+
 export const severityLabels: Record<Severity, string> = {
   low: 'Thấp',
   medium: 'Trung bình',
