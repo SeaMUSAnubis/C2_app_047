@@ -21,7 +21,6 @@ const employeeNavItems = [
 const adminNavItems = [
   { label: 'Endpoint agents', path: '/admin/agents', icon: Cpu },
   { label: 'Blocklist', path: '/admin/blocklist', icon: ShieldBan },
-  { label: 'Website bị chặn', path: '/admin/blocked-websites', icon: ShieldBan },
   { label: 'LLM Memory', path: '/admin/llm-memory', icon: Brain },
   { label: 'Tài khoản hệ thống', path: '/admin/accounts', icon: UserCog },
 ];
@@ -29,7 +28,6 @@ const adminNavItems = [
 const securityManagerNavItems = [
   { label: 'Endpoint agents', path: '/admin/agents', icon: Cpu },
   { label: 'Blocklist', path: '/admin/blocklist', icon: ShieldBan },
-  { label: 'Website bị chặn', path: '/admin/blocked-websites', icon: ShieldBan },
 ];
 
 function Sidebar() {
