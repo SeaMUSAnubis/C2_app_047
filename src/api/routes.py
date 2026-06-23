@@ -5,6 +5,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 
 from src.config import settings
+from src.models.explanation import (
+    AlertExplanationRequest,
+    AlertExplanationResponse,
+    AnomalyFeatureInput,
+)
 from src.models.schemas import (
     AccountPublic,
     AnalyzeRequest,
@@ -36,6 +41,7 @@ from src.models.schemas import (
 )
 from src.services import database
 from src.services.auth import create_access_token, decode_access_token, verify_password
+from src.services.llm.explanation_service import generate_explanation
 from src.services.ueba_ml.inference import (
     ModelArtifactError,
     get_ocsvm_metrics,
@@ -233,6 +239,83 @@ async def alerts(
 ) -> list[dict[str, Any]]:
     _ = current_account
     return database.list_frontend_alerts()
+
+
+@router.get("/alerts/{alert_id}/explanation", response_model=AlertExplanationResponse)
+async def get_alert_explanation(
+    alert_id: int,
+    current_account: Annotated[dict, Depends(get_current_account)],
+) -> AlertExplanationResponse:
+    from src.services.llm.explanation_service import compute_evidence_hash
+    _ = current_account
+    alert = database.get_alert(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+            
+    features = []
+    if alert.get("risk_factors"):
+        for factor in alert["risk_factors"]:
+            features.append(AnomalyFeatureInput(feature_name=str(factor)))
+            
+    req = AlertExplanationRequest(
+        alert_id=str(alert["id"]),
+        user_id=str(alert["user_id"] or ""),
+        device_id=str(alert.get("device_id") or ""),
+        risk_score=float(alert["risk_score"]),
+        severity=alert["severity"],
+        alert_status=alert["status"],
+        anomaly_score=alert.get("anomaly_score"),
+        main_reason=alert["title"],
+        anomalous_features=features,
+    )
+    
+    current_hash = compute_evidence_hash(req)
+    
+    if alert.get("explanation"):
+        try:
+            import json
+            exp_data = json.loads(alert["explanation"])
+            cached_response = AlertExplanationResponse.model_validate(exp_data)
+            if cached_response.evidence_hash == current_hash:
+                return cached_response
+        except Exception:
+            pass
+    
+    explanation = generate_explanation(req)
+    database.update_alert_explanation(alert_id, explanation.model_dump_json(exclude_unset=True))
+    return explanation
+
+
+@router.post("/alerts/{alert_id}/explanation/regenerate", response_model=AlertExplanationResponse)
+async def regenerate_alert_explanation(
+    alert_id: int,
+    current_account: Annotated[dict, Depends(require_role("admin"))],
+) -> AlertExplanationResponse:
+    _ = current_account
+    alert = database.get_alert(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+        
+    features = []
+    if alert.get("risk_factors"):
+        for factor in alert["risk_factors"]:
+            features.append(AnomalyFeatureInput(feature_name=str(factor)))
+            
+    req = AlertExplanationRequest(
+        alert_id=str(alert["id"]),
+        user_id=str(alert["user_id"] or ""),
+        device_id=str(alert.get("device_id") or ""),
+        risk_score=float(alert["risk_score"]),
+        severity=alert["severity"],
+        alert_status=alert["status"],
+        anomaly_score=alert.get("anomaly_score"),
+        main_reason=alert["title"],
+        anomalous_features=features,
+    )
+    
+    explanation = generate_explanation(req)
+    database.update_alert_explanation(alert_id, explanation.model_dump_json(exclude_unset=True))
+    return explanation
 
 
 @router.post("/raw-logs/ingest", response_model=RawLogRead, status_code=status.HTTP_201_CREATED)
