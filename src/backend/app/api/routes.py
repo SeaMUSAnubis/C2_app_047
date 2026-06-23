@@ -609,25 +609,36 @@ async def analyze_all(
     current_account: Annotated[dict, Depends(require_role("admin", "security_manager"))],
 ) -> dict:
     _ = current_account
-    from src.backend.app.db.session import create_alert, list_events, list_users
+    from src.backend.app.db.session import create_alert, get_connection, list_event_logs_for_user
     from src.backend.app.services.demo_pipeline import demo_pipeline
-    
-    print("\n[Analysis All] Bắt đầu phân tích toàn bộ user...")
-    users = list_users({})
-    total_users = len(users)
+
+    # Known mock user IDs from generate_mock_data.py (always these 8).
+    # We check which exist in the DB instead of scanning 18M event_logs rows.
+    MOCK_USER_IDS = [
+        "NGF0157", "LRR0148", "MOH0273", "LAP0338",
+        "BTR0002", "ACM0001", "CNL0003", "ADM0099",
+    ]
+
+    print("\n[Analysis All] Bắt đầu phân tích mock users...")
+
+    # Verify which mock users actually have event data
+    with get_connection() as conn:
+        existing = conn.execute(
+            "SELECT DISTINCT user_id FROM event_logs WHERE user_id = ANY(%s)",
+            (MOCK_USER_IDS,),
+        ).fetchall()
+    active_ids = [r["user_id"] for r in existing]
+
     anomalies_found = 0
     errors = 0
-    
-    print(f"[Analysis All] Tìm thấy {total_users} users. Bắt đầu phân tích từng user...")
-    
-    for _i, user in enumerate(users):
-        user_id = user["id"]
-        # print(f"[{i+1}/{total_users}] Analyzing user {user_id}...")
-        events = list_events({"user_id": user_id})
-        
+
+    print(f"[Analysis All] {len(active_ids)}/{len(MOCK_USER_IDS)} mock users có dữ liệu.")
+
+    for _i, user_id in enumerate(active_ids):
+        print(f"[{_i+1}/{len(active_ids)}] Analyzing {user_id}...")
+        events = list_event_logs_for_user(user_id, limit=2000)
         if not events:
             continue
-            
         result = demo_pipeline.analyze(events, user_id)
         if "error" in result:
             errors += 1
@@ -658,13 +669,13 @@ async def analyze_all(
             except Exception as e:
                 print(f"Failed to create alert for {user_id}: {e}")
                 
-    print(f"[Analysis All] Hoàn tất! Phân tích {total_users} users. Phát hiện {anomalies_found} bất thường.")
-    
+    print(f"[Analysis All] Hoàn tất! {len(active_ids)} users analyzed. Phát hiện {anomalies_found} bất thường, {errors} lỗi.")
+
     return {
         "status": "completed",
-        "total_users_analyzed": total_users,
+        "total_users_analyzed": len(active_ids),
         "anomalies_found": anomalies_found,
-        "errors": errors
+        "errors": errors,
     }
 
 @router.post("/datasets/cert-r42/import")

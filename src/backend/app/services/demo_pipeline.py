@@ -13,8 +13,11 @@ from src.backend.app.services.llm import explain_alert
 
 warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-MODEL_PATH = os.getenv("MODEL_PATH", str(ROOT_DIR / "weights" / "ocsvm_cert_r42_chunked.joblib"))
+ROOT_DIR = Path(__file__).resolve().parents[4]  # services -> app -> backend -> src -> repo root
+MODEL_PATH = os.getenv(
+    "OCSVM_MODEL_PATH",
+    os.getenv("MODEL_PATH", str(ROOT_DIR / "src" / "ml" / "weights" / "ocsvm_cert_r42_chunked.joblib")),
+)
 DATA_DIR = os.getenv("DATA_DIR", str(ROOT_DIR / "data" / "sample" / "cert-r4.2-small"))
 
 class DemoPipeline:
@@ -32,20 +35,52 @@ class DemoPipeline:
             loaded = joblib.load(MODEL_PATH)
             if isinstance(loaded, dict):
                 self.model = loaded.get("pipeline", loaded.get("model"))
-                self.feature_columns = loaded.get("feature_columns", getattr(self.model, "feature_names_in_", []))
+                # The saved dict uses "feature_cols" (not "feature_columns")
+                self.feature_columns = loaded.get(
+                    "feature_cols",
+                    loaded.get("feature_columns", getattr(self.model, "feature_names_in_", [])),
+                )
             else:
                 self.model = loaded
                 self.feature_columns = getattr(self.model, "feature_names_in_", [])
-                
+
             if hasattr(self.feature_columns, "tolist"):
                 self.feature_columns = self.feature_columns.tolist()
+
+            print(f"DemoPipeline: model loaded, {len(self.feature_columns)} features: {self.feature_columns}")
 
         except Exception as e:
             print(f"DemoPipeline error loading model: {e}")
 
+    @staticmethod
+    def _is_after_hours(ts_str: str | None) -> bool:
+        """Check whether a timestamp falls outside 08:00–18:00."""
+        if not ts_str:
+            return False
+        try:
+            from datetime import datetime as dt
+            ts = dt.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+            return ts.hour < 8 or ts.hour >= 18
+        except (ValueError, TypeError):
+            try:
+                ts = dt.strptime(str(ts_str), "%m/%d/%Y %H:%M:%S")
+                return ts.hour < 8 or ts.hour >= 18
+            except (ValueError, TypeError):
+                return False
+
     def extract_features(self, events: list[dict[str, Any]]) -> pd.DataFrame:
-        """
-        Simplify the logic of extract_features.py for a demo batch of events.
+        """Extract the 20 features the OCSVM model was actually trained on.
+
+        Feature list (from ocsvm_cert_r42_chunked.joblib):
+          logon_count, logon_after_hours_count,
+          logon_activity_Logoff_count, logon_activity_Logon_count,
+          device_count, device_after_hours_count,
+          device_activity_Connect_count, device_activity_Disconnect_count,
+          file_count, file_after_hours_count,
+          email_count, email_after_hours_count,
+          email_size_sum, email_size_mean, email_size_max,
+          email_attachments_sum, email_attachments_mean, email_attachments_max,
+          http_count, http_after_hours_count
         """
         if not events:
             return pd.DataFrame()
@@ -54,66 +89,100 @@ class DemoPipeline:
         if df.empty:
             return pd.DataFrame()
 
-        features = {}
-        
-        # Logon
-        logons = df[df["event_type"] == "logon"]
-        features["n_logon"] = len(logons)
-        # Simplification: count logons where 'after_hours' might be implied.
-        features["n_logon_afterhours"] = len(logons) if len(logons) > 0 else 0
-        features["n_logon_weekend"] = 0
-        features["n_logon_other_pc"] = 0
-        features["n_distinct_pc"] = logons["pc"].nunique() if "pc" in logons else 1
-        features["first_logon_hour"] = 8
-        features["last_logon_hour"] = 20
+        # Extract activity / timestamp from raw payload when available
+        def _col_or_raw(col: str) -> pd.Series:
+            if col in df.columns:
+                return df[col].fillna("")
+            return pd.Series([""] * len(df), index=df.index)
 
-        # Device
-        devices = df[df["event_type"] == "device"]
-        features["n_device_connect"] = 0
-        if "activity" in devices.columns:
-            features["n_device_connect"] = int((devices["activity"] == "Connect").sum())
-        features["n_device_afterhours"] = features["n_device_connect"]
-        features["n_device_weekend"] = 0
+        activity = _col_or_raw("activity")
+        action = _col_or_raw("action")
+        ts_col = _col_or_raw("timestamp")
 
-        # File
-        files = df[df["event_type"] == "file"]
-        features["n_file_copy"] = len(files)
-        # Check if filename ends with exe
-        features["n_file_exe"] = 0
-        if "filename" in files.columns:
-            features["n_file_exe"] = int(files["filename"].str.endswith("exe", na=False).sum())
-        features["n_file_doc"] = 0
-        features["n_file_zip"] = 0
-        features["n_file_afterhours"] = features["n_file_copy"]
+        # Effective activity: prefer raw.activity, fall back to action
+        eff_activity = activity.where(activity != "", action)
 
-        # Email
-        emails = df[df["event_type"] == "email"]
-        features["n_email"] = len(emails)
-        features["n_email_recipients"] = len(emails)
-        features["n_email_external"] = 0
-        features["email_size_total"] = 0
-        features["email_attach_total"] = 0
-        features["n_email_afterhours"] = 0
+        after_hours_mask = ts_col.apply(self._is_after_hours)
 
-        # HTTP
-        https = df[df["event_type"] == "http"]
-        features["n_http"] = len(https)
-        features["n_http_wikileaks"] = 0
-        features["n_http_jobsearch"] = 0
-        features["n_http_keylogger"] = 0
-        if "url" in https.columns:
-            features["n_http_wikileaks"] = int(https["url"].str.contains("wikileaks", na=False, case=False).sum())
-            features["n_http_jobsearch"] = int(https["url"].str.contains("indeed|monster|careerbuilder|job", na=False, case=False).sum())
-            features["n_http_keylogger"] = int(https["url"].str.contains("keylog", na=False, case=False).sum())
-        features["n_http_afterhours"] = features["n_http"]
+        # ── Logon ──
+        logon_mask = df["event_type"] == "logon"
+        logons = df[logon_mask]
+        logon_activity = eff_activity[logon_mask].str.lower()
+        logon_ah = after_hours_mask[logon_mask]
 
-        # Context
-        features["is_itadmin"] = 0
-        for p in ["O", "C", "E", "A", "N"]:
-            features[p] = 3.0
+        logon_count = int(logon_mask.sum())
+        logon_after_hours_count = int(logon_ah.sum())
+        logon_activity_Logoff_count = int((logon_activity == "logoff").sum())
+        logon_activity_Logon_count = int((~logon_activity.isin(["logoff"])).sum())
+
+        # ── Device ──
+        device_mask = df["event_type"] == "device"
+        device_activity = eff_activity[device_mask].str.lower()
+        device_ah = after_hours_mask[device_mask]
+
+        device_count = int(device_mask.sum())
+        device_after_hours_count = int(device_ah.sum())
+        device_activity_Connect_count = int((device_activity == "connect").sum())
+        device_activity_Disconnect_count = int((device_activity == "disconnect").sum())
+
+        # ── File ──
+        file_mask = df["event_type"] == "file"
+        file_ah = after_hours_mask[file_mask]
+
+        file_count = int(file_mask.sum())
+        file_after_hours_count = int(file_ah.sum())
+
+        # ── Email ──
+        email_mask = df["event_type"] == "email"
+        emails = df[email_mask]
+        email_ah = after_hours_mask[email_mask]
+
+        email_count = int(email_mask.sum())
+        email_after_hours_count = int(email_ah.sum())
+
+        sizes = pd.to_numeric(_col_or_raw("size")[email_mask], errors="coerce").fillna(0).astype(int)
+        email_size_sum = int(sizes.sum())
+        email_size_mean = float(sizes.mean()) if email_count > 0 else 0.0
+        email_size_max = int(sizes.max()) if email_count > 0 else 0
+
+        attach = pd.to_numeric(_col_or_raw("attachments")[email_mask], errors="coerce").fillna(0).astype(int)
+        email_attachments_sum = int(attach.sum())
+        email_attachments_mean = float(attach.mean()) if email_count > 0 else 0.0
+        email_attachments_max = int(attach.max()) if email_count > 0 else 0
+
+        # ── HTTP ──
+        http_mask = df["event_type"] == "http"
+        http_ah = after_hours_mask[http_mask]
+
+        http_count = int(http_mask.sum())
+        http_after_hours_count = int(http_ah.sum())
+
+        features = {
+            "logon_count": logon_count,
+            "logon_after_hours_count": logon_after_hours_count,
+            "logon_activity_Logoff_count": logon_activity_Logoff_count,
+            "logon_activity_Logon_count": logon_activity_Logon_count,
+            "device_count": device_count,
+            "device_after_hours_count": device_after_hours_count,
+            "device_activity_Connect_count": device_activity_Connect_count,
+            "device_activity_Disconnect_count": device_activity_Disconnect_count,
+            "file_count": file_count,
+            "file_after_hours_count": file_after_hours_count,
+            "email_count": email_count,
+            "email_after_hours_count": email_after_hours_count,
+            "email_size_sum": email_size_sum,
+            "email_size_mean": email_size_mean,
+            "email_size_max": email_size_max,
+            "email_attachments_sum": email_attachments_sum,
+            "email_attachments_mean": email_attachments_mean,
+            "email_attachments_max": email_attachments_max,
+            "http_count": http_count,
+            "http_after_hours_count": http_after_hours_count,
+        }
 
         row = pd.DataFrame([features])
-        
+
+        # Align to model's expected column order, fill missing with 0
         if self.feature_columns:
             for col in self.feature_columns:
                 if col not in row.columns:
