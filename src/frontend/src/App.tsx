@@ -12,7 +12,6 @@ const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 const DevicesPage = lazy(() => import('./pages/DevicesPage').then((m) => ({ default: m.DevicesPage })));
 const LogsPage = lazy(() => import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })));
-const AdminBlockedWebsitesPage = lazy(() => import('./pages/AdminBlockedWebsitesPage'));
 const AdminAccountsPage = lazy(() => import('./pages/AdminAccountsPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 const MyRiskPage = lazy(() => import('./pages/MyRiskPage'));
@@ -43,7 +42,6 @@ function App() {
             <Route path="/my-risk" element={<Suspense fallback={<PageFallback />}><MyRiskPage /></Suspense>} />
 
             <Route element={<RoleGuard allowedRoles={['admin', 'security_manager']} />}>
-              <Route path="/admin/blocked-websites" element={<Suspense fallback={<PageFallback />}><AdminBlockedWebsitesPage /></Suspense>} />
               <Route path="/admin/blocklist" element={<Suspense fallback={<PageFallback />}><BlocklistPage /></Suspense>} />
               <Route path="/admin/agents" element={<Suspense fallback={<PageFallback />}><AgentsPage /></Suspense>} />
               <Route path="/admin/agents/:agentId" element={<Suspense fallback={<PageFallback />}><AgentDetailPage /></Suspense>} />
