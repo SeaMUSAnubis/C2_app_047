@@ -135,6 +135,10 @@ def initialize_database() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp ON event_logs(timestamp)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_event_logs_user ON event_logs(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_event_logs_device ON event_logs(device_id)")
+        # NOTE: idx_event_logs_logical_dedup (timestamp, user_id, device_id,
+        # event_type, resource) is created via migration on databases that need
+        # it — not here, because on a 18M-row table it exceeds the 5 s
+        # statement_timeout.
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS raw_user_logs (
@@ -462,9 +466,20 @@ def update_device(device_id: str, payload: dict[str, Any]) -> dict[str, Any] | N
 
 
 def ingest_event(payload: dict[str, Any]) -> dict[str, Any]:
+    """Insert an event_log row.  Idempotent by logical key AND source_id.
+
+    ON CONFLICT(source_id) catches re-imports of the same dataset, but when
+    mock data is regenerated (new UUIDs), the logical tuple
+    (timestamp, user_id, device_id, event_type, resource) is the true guard.
+    """
     now = utc_now()
     metadata_json = json.dumps(payload.get("metadata") or {}, sort_keys=True)
     raw_json = json.dumps(payload.get("raw") or {}, sort_keys=True)
+    _ts = payload["timestamp"]
+    _uid = payload.get("user_id") or ""
+    _did = payload.get("device_id") or ""
+    _et = payload["event_type"]
+    _res = payload.get("resource") or ""
     with get_connection() as conn:
         row = conn.execute(
             """
@@ -472,7 +487,15 @@ def ingest_event(payload: dict[str, Any]) -> dict[str, Any]:
                 source_id, source_file, timestamp, user_id, device_id, event_type,
                 action, resource, metadata_json, raw_json, created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            WHERE NOT EXISTS (
+                SELECT 1 FROM event_logs
+                WHERE timestamp = %s
+                  AND COALESCE(user_id, '') = %s
+                  AND COALESCE(device_id, '') = %s
+                  AND event_type = %s
+                  AND COALESCE(resource, '') = %s
+            )
             ON CONFLICT(source_id) DO UPDATE SET
                 source_file = excluded.source_file,
                 timestamp = excluded.timestamp,
@@ -497,8 +520,23 @@ def ingest_event(payload: dict[str, Any]) -> dict[str, Any]:
                 metadata_json,
                 raw_json,
                 now,
+                # WHERE NOT EXISTS params
+                _ts, _uid, _did, _et, _res,
             ),
         ).fetchone()
+        if row is None:
+            # Logical duplicate already exists (different source_id).
+            # Return the existing row so callers always get a valid result.
+            row = conn.execute(
+                """SELECT * FROM event_logs
+                   WHERE timestamp = %s
+                     AND COALESCE(user_id, '') = %s
+                     AND COALESCE(device_id, '') = %s
+                     AND event_type = %s
+                     AND COALESCE(resource, '') = %s
+                   LIMIT 1""",
+                (_ts, _uid, _did, _et, _res),
+            ).fetchone()
         return _decode_json_fields(_row_to_dict(row) or {})
 
 
