@@ -7,7 +7,7 @@ import type { Column } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
 import { StatusBadge } from '../components/security/SeverityBadge';
 import { getLogs } from '../lib/apiClient';
-import { formatDateTime, severityOptions, shortText } from '../lib/labels';
+import { eventTypeLabel, formatDateTime, severityOptions, shortText } from '../lib/labels';
 import type { EventLogItem } from '../types/security';
 
 const PAGE_SIZE = 25;
@@ -116,7 +116,7 @@ export function LogsPage() {
     { key: 'timestamp', header: 'Thời gian', width: '16%', className: 'cell-nowrap', sortable: true, value: (l) => l.timestamp, render: (l) => formatDateTime(l.timestamp) },
     { key: 'user', header: 'Người dùng', width: '14%', className: 'col-secondary', render: (l) => shortText(l.user ?? l.userId, 'Không xác định') },
     { key: 'device', header: 'Thiết bị', width: '12%', className: 'cell-nowrap', render: (l) => <code>{shortText(l.device ?? l.deviceId, 'Không xác định')}</code> },
-    { key: 'eventType', header: 'Sự kiện', width: '17%', render: (l) => (<span className="event-name">{shortText(l.eventType, 'Không xác định')}</span>) },
+    { key: 'eventType', header: 'Sự kiện', width: '17%', render: (l) => (<span className="event-name">{eventTypeLabel(l.eventType)}</span>) },
     { key: 'sourceIp', header: 'IP nguồn', width: '13%', className: 'cell-nowrap col-secondary', render: (l) => shortText(l.sourceIp, 'Không xác định') },
     { key: 'resource', header: 'Tài nguyên', width: '14%', className: 'col-optional', render: (l) => <span title={l.resource}>{shortText(l.resource, 'Chưa có')}</span> },
     { key: 'result', header: 'Kết quả', width: '7%', className: 'col-optional', render: (l) => <StatusBadge value={l.result} /> },
@@ -129,7 +129,7 @@ export function LogsPage() {
 
       <section className="filter-panel">
         <label><Search size={16} /><input value={search} onChange={(event) => setManualSearch(event.target.value)} placeholder="Tìm theo người dùng, thiết bị, IP, tài nguyên..." /></label>
-        <select value={eventType} onChange={(event) => setEventType(event.target.value)}><option value="all">Tất cả loại sự kiện</option>{eventTypes.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+        <select value={eventType} onChange={(event) => setEventType(event.target.value)}><option value="all">Tất cả loại sự kiện</option>{eventTypes.map((item) => <option key={item} value={item}>{eventTypeLabel(item)}</option>)}</select>
         <select value={severity} onChange={(event) => setSeverity(event.target.value)}><option value="all">Tất cả mức độ</option>{severityOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
         <select value={timeRange} onChange={(event) => setTimeRange(event.target.value)}><option value="all">Tất cả thời gian</option><option value="24h">24 giờ gần nhất</option><option value="7d">7 ngày gần nhất</option><option value="30d">30 ngày gần nhất</option></select>
         <select value={result} onChange={(event) => setResult(event.target.value)}><option value="all">Tất cả kết quả</option>{results.map((item) => <option key={item} value={item}>{item}</option>)}</select>

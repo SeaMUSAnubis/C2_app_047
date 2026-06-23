@@ -7,7 +7,7 @@ import { RiskScore } from '../components/security/RiskScore';
 import { SeverityBadge } from '../components/security/SeverityBadge';
 import { StatCard } from '../components/security/StatCard';
 import { AlertDetailModal } from '../features/alerts/AlertDetailModal';
-import { statusLabel } from '../lib/labels';
+import { eventTypeLabel, statusLabel } from '../lib/labels';
 import { getEmployeeOverview } from '../lib/apiClient';
 import type { EmployeeOverview } from '../lib/apiClient';
 
@@ -89,7 +89,7 @@ export default function MyRiskPage() {
 
   const logColumns: Column<MyLog>[] = [
     { key: 'timestamp', header: 'Thời gian' },
-    { key: 'eventType', header: 'Loại sự kiện', render: (l) => (<>{l.severity && <SeverityBadge severity={l.severity} />} <span className="event-name">{l.eventType}</span></>) },
+    { key: 'eventType', header: 'Loại sự kiện', render: (l) => (<span className="event-name">{eventTypeLabel(l.eventType)}</span>) },
     { key: 'device', header: 'Thiết bị', render: (l) => <code>{l.device ?? '-'}</code> },
     { key: 'sourceIp', header: 'IP nguồn', render: (l) => l.sourceIp ?? '-' },
     { key: 'resource', header: 'Tài nguyên', render: (l) => l.resource ?? '-' },
