@@ -32,7 +32,6 @@ services:
       - ./data:/app/data:ro
       - ./eval:/app/eval
       - ./src/backend/app:/app/src/backend/app
-      - ./src/frontend/dist:/app/src/frontend/dist:ro
       - ./requirements.txt:/app/requirements.txt:ro
       - ./src/ml:/app/src/ml:ro
     healthcheck:
