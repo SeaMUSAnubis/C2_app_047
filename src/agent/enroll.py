@@ -19,15 +19,15 @@ import socket
 import sys
 from pathlib import Path
 
-from src.agent.config import AgentConfig
-from src.agent.state import (
+from agent.config import AgentConfig
+from agent.state import (
     clear_state,
     load_state,
     make_enrolled_state,
     save_state,
     state_file_exists,
 )
-from src.agent.transport import PermanentError, TransientError, Transport
+from agent.transport import PermanentError, TransientError, Transport
 
 logger = logging.getLogger(__name__)
 

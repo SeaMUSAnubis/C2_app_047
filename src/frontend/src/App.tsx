@@ -16,6 +16,10 @@ const AdminBlockedWebsitesPage = lazy(() => import('./pages/AdminBlockedWebsites
 const AdminAccountsPage = lazy(() => import('./pages/AdminAccountsPage'));
 const ModelTestPage = lazy(() => import('./pages/ModelTestPage'));
 const MyRiskPage = lazy(() => import('./pages/MyRiskPage'));
+const AgentsPage = lazy(() => import('./pages/AgentsPage'));
+const AgentDetailPage = lazy(() => import('./pages/AgentDetailPage'));
+const BlocklistPage = lazy(() => import('./pages/BlocklistPage'));
+const MemoryAdminPage = lazy(() => import('./features/admin/MemoryAdminPage').then((m) => ({ default: m.MemoryAdminPage })));
 
 function PageFallback() {
   return <div className="panel-card">Đang tải trang...</div>;
@@ -40,10 +44,14 @@ function App() {
 
             <Route element={<RoleGuard allowedRoles={['admin', 'security_manager']} />}>
               <Route path="/admin/blocked-websites" element={<Suspense fallback={<PageFallback />}><AdminBlockedWebsitesPage /></Suspense>} />
+              <Route path="/admin/blocklist" element={<Suspense fallback={<PageFallback />}><BlocklistPage /></Suspense>} />
+              <Route path="/admin/agents" element={<Suspense fallback={<PageFallback />}><AgentsPage /></Suspense>} />
+              <Route path="/admin/agents/:agentId" element={<Suspense fallback={<PageFallback />}><AgentDetailPage /></Suspense>} />
             </Route>
 
             <Route element={<RoleGuard allowedRoles={['admin']} />}>
               <Route path="/admin/accounts" element={<Suspense fallback={<PageFallback />}><AdminAccountsPage /></Suspense>} />
+              <Route path="/admin/llm-memory" element={<Suspense fallback={<PageFallback />}><MemoryAdminPage /></Suspense>} />
             </Route>
           </Route>
 

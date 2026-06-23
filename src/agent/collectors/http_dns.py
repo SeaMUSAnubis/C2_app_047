@@ -31,7 +31,7 @@ import threading
 from datetime import UTC, datetime
 from typing import Any
 
-from src.agent.collectors.base import Collector
+from agent.collectors.base import Collector
 
 logger = logging.getLogger(__name__)
 
@@ -347,7 +347,7 @@ def build_http_collectors(config_client: Any) -> list[Collector]:
     if config_client.policy.is_collector_enabled("http"):
         collectors.append(DomainCheckCollector(config_client))
     if config_client.policy.is_collector_enabled("http_dns_sniff"):
-        from src.agent.config import is_linux
+        from agent.config import is_linux
         if is_linux():
             collectors.append(DnsSniffCollector(config_client))
     return collectors

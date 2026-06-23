@@ -3,7 +3,9 @@ import { HardDrive, Search } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
+import { StatusBadge } from '../components/security/SeverityBadge';
 import { getDevices } from '../lib/apiClient';
+import { formatDateTime, shortText } from '../lib/labels';
 import type { DeviceEntity } from '../types/security';
 
 const PAGE_SIZE = 25;
@@ -108,14 +110,14 @@ export function DevicesPage() {
 
           <DataTable<DeviceEntity>
             columns={[
-              { key: 'id', header: 'Thiết bị', render: (d) => <code>{d.id}</code> },
-              { key: 'owner', header: 'Chủ sở hữu', render: (d) => d.owner ?? d.assignedUser ?? 'Chưa gán' },
-              { key: 'os', header: 'Hệ điều hành', render: (d) => d.os ?? 'Không rõ' },
-              { key: 'ip', header: 'IP', render: (d) => d.ip ?? '-' },
-              { key: 'lastSeen', header: 'Hoạt động cuối' },
-              { key: 'suspiciousEvents', header: 'Sự kiện đáng ngờ', align: 'right', sortable: true, value: (d) => d.suspiciousEvents ?? 0 },
-              { key: 'posture', header: 'Tình trạng', render: (d) => <span className="status-pill">{d.posture ?? d.status}</span> },
-              { key: 'riskScore', header: 'Rủi ro', align: 'right', sortable: true, value: (d) => d.riskScore ?? 0, render: (d) => <RiskScore value={d.riskScore ?? 0} size="sm" /> },
+              { key: 'id', header: 'Thiết bị', width: '13%', className: 'cell-nowrap', render: (d) => <code>{d.id}</code> },
+              { key: 'owner', header: 'Chủ sở hữu', width: '15%', render: (d) => <span title={d.owner ?? d.assignedUser}>{shortText(d.owner ?? d.assignedUser, 'Chưa gán')}</span> },
+              { key: 'os', header: 'Hệ điều hành', width: '13%', className: 'col-secondary', render: (d) => <span className="os-badge">{shortText(d.os, 'Không rõ')}</span> },
+              { key: 'ip', header: 'IP', width: '13%', className: 'cell-nowrap', render: (d) => shortText(d.ip, 'Không xác định') },
+              { key: 'lastSeen', header: 'Hoạt động cuối', width: '17%', className: 'cell-nowrap col-optional', render: (d) => formatDateTime(d.lastSeen) },
+              { key: 'suspiciousEvents', header: 'Sự kiện đáng ngờ', align: 'center', width: '11%', className: 'col-optional', sortable: true, value: (d) => d.suspiciousEvents ?? 0 },
+              { key: 'posture', header: 'Tình trạng', width: '10%', className: 'col-secondary', render: (d) => <StatusBadge value={d.posture ?? d.status} /> },
+              { key: 'riskScore', header: 'Rủi ro', align: 'center', width: '8%', className: 'cell-risk', sortable: true, value: (d) => d.riskScore ?? 0, render: (d) => <RiskScore value={d.riskScore ?? 0} size="sm" /> },
             ]}
             rows={filteredDevices}
             rowKey={(d) => d.id}
@@ -129,16 +131,23 @@ export function DevicesPage() {
           />
         </div>
 
-        {activeSelected && <aside className="detail-panel profile-panel">
+        {activeSelected && <aside className={`detail-panel profile-panel ${(activeSelected.riskScore ?? 0) >= 70 ? 'detail-risk-high' : ''}`}>
           <div className="detail-icon"><HardDrive size={24} /></div>
           <span className="eyebrow">Chi tiết thiết bị</span>
-          <h2>{activeSelected.hostname ?? activeSelected.id}</h2>
+          <div className="detail-heading-row">
+            <div>
+              <h2>{activeSelected.hostname ?? activeSelected.id}</h2>
+              <p><code>{activeSelected.id}</code></p>
+            </div>
+            <RiskScore value={activeSelected.riskScore ?? 0} size="md" />
+          </div>
           <p>{activeSelected.id} thuộc {activeSelected.owner ?? activeSelected.assignedUser ?? 'người dùng chưa xác định'} với tình trạng {activeSelected.posture ?? activeSelected.status ?? 'chưa rõ'}.</p>
           <div className="profile-grid">
-            <div><span>Hệ điều hành</span><strong>{activeSelected.os ?? 'Không rõ'}</strong></div>
-            <div><span>IP</span><strong>{activeSelected.ip ?? '-'}</strong></div>
-            <div><span>Hoạt động cuối</span><strong>{activeSelected.lastSeen ?? '-'}</strong></div>
+            <div><span>Hệ điều hành</span><strong>{shortText(activeSelected.os, 'Không rõ')}</strong></div>
+            <div><span>IP</span><strong>{shortText(activeSelected.ip, 'Không xác định')}</strong></div>
+            <div><span>Hoạt động cuối</span><strong>{formatDateTime(activeSelected.lastSeen)}</strong></div>
             <div><span>Sự kiện đáng ngờ</span><strong>{activeSelected.suspiciousEvents ?? 0}</strong></div>
+            <div><span>Tình trạng</span><StatusBadge value={activeSelected.posture ?? activeSelected.status} /></div>
           </div>
           <h3>Đánh giá tình trạng</h3>
           <p>Thiết bị này đang được ưu tiên theo điểm rủi ro và số sự kiện bất thường lấy trực tiếp từ cơ sở dữ liệu.</p>

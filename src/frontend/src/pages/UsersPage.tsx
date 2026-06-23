@@ -3,8 +3,9 @@ import { Search, UserRoundCheck } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
+import { StatusBadge } from '../components/security/SeverityBadge';
 import { getUsers } from '../lib/apiClient';
-import { riskLevelOptions } from '../lib/labels';
+import { formatDateTime, riskLevelOptions, shortText } from '../lib/labels';
 import type { UserEntity } from '../types/security';
 
 const PAGE_SIZE = 25;
@@ -110,14 +111,14 @@ export function UsersPage() {
           {!loading && !error && users.length > 0 && filteredUsers.length === 0 && <p>Không có người dùng khớp bộ lọc.</p>}
           <DataTable<UserEntity>
             columns={[
-              { key: 'name', header: 'Người dùng', render: (u) => (<><strong>{u.name}</strong><span className="muted-line">{u.account}</span></>) },
-              { key: 'role', header: 'Vai trò' },
-              { key: 'department', header: 'Phòng ban' },
-              { key: 'devices', header: 'Thiết bị', align: 'right' },
-              { key: 'lastSeen', header: 'Hoạt động cuối' },
-              { key: 'baseline', header: 'Hồ sơ chuẩn', render: (u) => <span className="status-pill">{u.baseline}</span> },
-              { key: 'anomalies', header: 'Bất thường', align: 'right', sortable: true, value: (u) => u.anomalies ?? 0 },
-              { key: 'riskScore', header: 'Rủi ro', align: 'right', sortable: true, value: (u) => u.riskScore ?? 0, render: (u) => <RiskScore value={u.riskScore ?? 0} size="sm" /> },
+              { key: 'name', header: 'Người dùng', width: '24%', render: (u) => (<div className="cell-main" title={`${u.name} ${u.account}`}><strong>{u.name}</strong><span className="muted-line">{u.account}</span></div>) },
+              { key: 'role', header: 'Vai trò', width: '12%', className: 'col-secondary', render: (u) => shortText(u.role, 'Không xác định') },
+              { key: 'department', header: 'Phòng ban', width: '12%', className: 'col-secondary', render: (u) => shortText(u.department, 'Không xác định') },
+              { key: 'devices', header: 'Thiết bị', align: 'center', width: '8%' },
+              { key: 'lastSeen', header: 'Hoạt động cuối', width: '16%', className: 'cell-nowrap col-optional', render: (u) => formatDateTime(u.lastSeen) },
+              { key: 'baseline', header: 'Hồ sơ chuẩn', width: '12%', className: 'col-optional', render: (u) => <StatusBadge value={u.baseline} /> },
+              { key: 'anomalies', header: 'Bất thường', align: 'center', width: '7%', sortable: true, value: (u) => u.anomalies ?? 0 },
+              { key: 'riskScore', header: 'Rủi ro', align: 'center', width: '8%', className: 'cell-risk', sortable: true, value: (u) => u.riskScore ?? 0, render: (u) => <RiskScore value={u.riskScore ?? 0} size="sm" /> },
             ]}
             rows={filteredUsers}
             rowKey={(u) => u.account}
@@ -131,16 +132,22 @@ export function UsersPage() {
           />
         </div>
 
-        {activeSelected && <aside className="detail-panel profile-panel">
+        {activeSelected && <aside className={`detail-panel profile-panel ${(activeSelected.riskScore ?? 0) >= 70 ? 'detail-risk-high' : ''}`}>
           <div className="detail-icon"><UserRoundCheck size={24} /></div>
           <span className="eyebrow">Hồ sơ chuẩn</span>
-          <h2>{activeSelected.name}</h2>
-          <p>{activeSelected.explanation}</p>
+          <div className="detail-heading-row">
+            <div>
+              <h2>{activeSelected.name}</h2>
+              <p>{activeSelected.account}</p>
+            </div>
+            <RiskScore value={activeSelected.riskScore ?? 0} size="md" />
+          </div>
+          <p>{shortText(activeSelected.explanation, 'Chưa có giải thích hồ sơ chuẩn.')}</p>
           <div className="profile-grid">
-            <div><span>Giờ đăng nhập thường lệ</span><strong>{activeSelected.loginHours}</strong></div>
-            <div><span>Thiết bị phổ biến</span><strong>{activeSelected.commonDevices}</strong></div>
+            <div><span>Giờ đăng nhập thường lệ</span><strong>{shortText(activeSelected.loginHours)}</strong></div>
+            <div><span>Thiết bị phổ biến</span><strong>{shortText(activeSelected.commonDevices)}</strong></div>
             <div><span>Số bất thường</span><strong>{activeSelected.anomalies}</strong></div>
-            <div><span>Trạng thái hồ sơ chuẩn</span><strong>{activeSelected.baseline}</strong></div>
+            <div><span>Trạng thái hồ sơ chuẩn</span><StatusBadge value={activeSelected.baseline} /></div>
           </div>
         </aside>}
       </section>

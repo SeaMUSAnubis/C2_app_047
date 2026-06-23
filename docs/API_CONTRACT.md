@@ -1,269 +1,405 @@
 # API Contract
 
-File này là hợp đồng làm việc giữa backend và frontend. Các endpoint shapes được finalized ở đây trước khi tích hợp frontend.
+Hợp đồng API giữa **backend FastAPI** và **frontend React** + **agent Python**.
+Mọi endpoint shapes finalize ở đây trước khi integrate.
 
-## Nhóm endpoints
+> **Status**: Updated to v0.1.0 (Phase 1 + 3 + 4 done). The full live
+> reference is always at `GET /docs` (Swagger UI) on a running server.
 
-```text
-POST /api/auth/login           # Đăng nhập
-GET  /api/auth/me              # Lấy thông tin account hiện tại
-GET  /api/dashboard/summary    # Tổng quan dashboard
+## Cấu trúc response chuẩn
 
-GET  /api/users                # Danh sách users
-GET  /api/users/{user_id}      # Chi tiết user
-POST /api/users                # Tạo user (admin only)
-PATCH /api/users/{user_id}     # Sửa user (admin only)
+Tất cả response trả về JSON. Lỗi trả về:
 
-GET  /api/devices              # Danh sách devices
-GET  /api/devices/{device_id}  # Chi tiết device
-POST /api/devices              # Tạo device (admin only)
-PATCH /api/devices/{device_id} # Sửa device (admin only)
-
-POST /api/logs/ingest          # Ingest event log
-GET  /api/logs                 # Danh sách event logs
-
-POST /api/raw-logs/ingest      # Ingest raw log (admin/analyst)
-POST /api/raw-logs/batch       # Batch ingest raw logs
-GET  /api/raw-logs             # Danh sách raw logs (phân trang)
-GET  /api/raw-logs/{log_id}    # Chi tiết raw log
-
-GET  /api/models/{version}                # Model metadata
-POST /api/models/{version}/infer          # Model inference
-GET  /api/models/{version}/metrics        # Model metrics
-
-POST /api/alerts               # Tạo alert (admin/analyst)
-GET  /api/alerts               # Danh sách alerts (filter)
-GET  /api/alerts/summary       # Tổng quan alerts
-GET  /api/alerts/{id}          # Chi tiết alert
-PATCH /api/alerts/{id}/status  # Cập nhật status (admin/analyst)
-
-GET  /api/dashboard/alerts-over-time       # Alerts theo thời gian
-GET  /api/dashboard/severity-distribution  # Phân bố severity
-GET  /api/dashboard/top-risk-users         # Top users risk cao
-GET  /api/dashboard/top-risk-devices       # Top devices risk cao
+```json
+{
+  "detail": "Human-readable error message"
+}
 ```
 
-## Contract cho Frontend
+Status code semantic:
+- `200` — OK.
+- `201` — Created.
+- `204` — No content.
+- `400` — Bad request (malformed).
+- `401` — Not authenticated.
+- `403` — Authenticated but lacking permission.
+- `404` — Resource not found.
+- `409` — Conflict (duplicate).
+- `422` — Validation error.
+- `500` — Internal error.
 
-Các shapes sau đây match với TypeScript types trong `frontend/src/types/*`.
+## Pagination
 
-### Auth
+List endpoints dùng `limit` + `offset` query params. Response shape:
 
-`POST /api/auth/login`
+```json
+{
+  "items": [...],
+  "total": 1234,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+Hoặc với header `X-Total-Count` (cho browser fetch).
+
+## Auth
+
+Mọi endpoint yêu cầu auth trừ `POST /api/auth/login`, `GET /api/health`,
+`POST /api/agents/register` (cần enrollment token thay vì JWT).
+
+Header: `Authorization: Bearer <jwt>` (human) hoặc `X-API-Key: o47ag_xxx`
+(agent).
+
+---
+
+## Auth
+
+```
+POST /api/auth/login
+```
 
 Request:
-
+```json
+{ "email": "admin@demo.com", "password": "admin123" }
+```
+Response 200:
 ```json
 {
-  "email": "admin@demo.com",
-  "password": "admin123"
+  "access_token": "eyJ...",
+  "token_type": "bearer",
+  "user": { "id": "1", "email": "admin@demo.com", "name": "Demo Admin", "role": "admin" }
 }
 ```
 
-Response (camelCase):
+```
+GET /api/auth/me
+```
+Response 200: user object.
 
+---
+
+## Dashboard
+
+```
+GET /api/dashboard/summary
+```
+Response 200:
 ```json
 {
-  "accessToken": "<jwt>",
-  "user": {
-    "id": "1",
-    "email": "admin@demo.com",
-    "name": "Demo Admin",
-    "role": "admin"
-  }
+  "total_users": 100,
+  "total_devices": 95,
+  "total_logs": 1234567,
+  "active_alerts": 23,
+  "high_risk_users": 5,
+  "critical_alerts": 2,
+  "blocked_websites": 12
 }
 ```
 
-Tài khoản demo:
+```
+GET /api/dashboard/overview
+```
+Response 200: full dashboard payload (KPIs, risk trend, severity
+volume, risk distribution, alerts, risky entities, timeline).
 
-- `admin@demo.com / admin123` (role: admin)
-- `analyst@demo.com / analyst123` (role: analyst)
+---
 
-`GET /api/auth/me` yêu cầu `Authorization: Bearer <jwt>` và trả về account hiện tại.
+## Users (CRUD)
 
-### Dashboard
-
-`GET /api/dashboard/summary` yêu cầu token.
-
-Response (camelCase):
-
-```json
-{
-  "totalUsers": 3,
-  "totalDevices": 3,
-  "totalLogs": 0,
-  "openAlerts": 0,
-  "highCriticalAlerts": 0,
-  "averageRiskScore": 22.3,
-  "currentModelVersion": "ocsvm-cert-r42-chunked",
-  "lastImportTime": null
-}
+```
+GET    /api/users?limit=&offset=    (admin, security_manager, analyst)
+GET    /api/users/{user_id}         (admin, security_manager, analyst)
+POST   /api/users                   (admin)
+PATCH  /api/users/{user_id}         (admin)
 ```
 
-### Users
-
-`GET /api/users` yêu cầu token. Trả về mảng trực tiếp (không có pagination wrapper).
-
-Response item (camelCase):
-
+User object:
 ```json
 {
   "id": "ACM0001",
-  "account": "acm0001",
-  "name": "Alice M. Carter",
-  "department": "Finance",
-  "role": "Accountant",
+  "username": "alice",
+  "full_name": "Alice Johnson",
+  "email": "alice@corp.com",
+  "department": "Engineering",
+  "job_role": "Senior Engineer",
   "status": "active",
-  "riskScore": 18,
-  "assignedDevices": 1,
-  "openAlerts": 0,
-  "lastSeen": "2026-06-13T08:12:00Z"
+  "risk_score": 42,
+  "app_account_id": 12,
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-06-22T10:00:00Z"
 }
 ```
 
-### Devices
+---
 
-`GET /api/devices` yêu cầu token. Trả về mảng trực tiếp.
+## Devices (CRUD)
 
-Response item (camelCase):
+```
+GET    /api/devices?limit=&offset=
+GET    /api/devices/{device_id}
+POST   /api/devices                 (admin)
+PATCH  /api/devices/{device_id}     (admin)
+```
 
+Device object:
 ```json
 {
-  "id": "PC-1001",
-  "hostname": "FIN-WS-1001",
-  "assignedUser": "acm0001",
-  "department": "Finance",
+  "id": "PC-1234",
+  "hostname": "alice-laptop",
+  "os": "macos",
+  "ip_address": "10.0.0.42",
+  "assigned_user_id": "ACM0001",
   "status": "active",
-  "riskScore": 12,
-  "openAlerts": 0,
-  "lastSeen": "2026-06-13T08:12:00Z"
+  "risk_score": 35,
+  "last_seen": "2026-06-22T10:00:00Z",
+  "created_at": "...",
+  "updated_at": "..."
 }
 ```
 
-Giá trị status: `active` (DB: `online`) hoặc `inactive` (DB: `offline`, `retired`).
+---
 
-### Logs
+## Event logs
 
-`GET /api/logs` yêu cầu token. Trả về mảng trực tiếp, giới hạn 100 records.
+```
+POST /api/logs/ingest
+```
+Request: `EventIngest` schema (see `DATA_CONTRACT.md`).
+Response 201: created event_log.
 
-Response item (camelCase):
+```
+GET /api/logs?user_id=&device_id=&from=&to=&limit=&offset=
+```
+Response 200: paginated list of `EventRead`.
 
+---
+
+## Alerts
+
+```
+GET /api/alerts?status=&severity=&user_id=&device_id=&limit=&offset=
+```
+Response 200: paginated list of `FrontendAlert` (id, title, severity,
+status, riskScore, time, etc.).
+
+```
+PATCH /api/alerts/{alert_id}/status
+```
+Request: `{ "status": "investigating" | "resolved" | "false_positive" }`.
+Response 200: updated alert.
+
+---
+
+## Raw logs (agent ingest)
+
+```
+POST /api/raw-logs/ingest
+POST /api/raw-logs/batch
+```
+Auth: agent X-API-Key HOẶC admin/analyst JWT.
+Request: `RawLogIngest` (see `DATA_CONTRACT.md`).
+Response 201 / 200: created raw_log.
+
+```
+GET /api/raw-logs?user_id=&device_id=&event_type=&limit=&offset=
+GET /api/raw-logs/{log_id}
+```
+Response: paginated `RawLogRead`.
+
+---
+
+## ML / Models
+
+```
+POST /api/models/{model_version}/infer
+```
+Request: `{ "features": {"n_logon": 5, ...}, "user_id": "ACM0001" }`.
+Response: `ModelInferResponse` (prediction, scores, risk_score, severity).
+
+```
+GET /api/models/{model_version}
+GET /api/models/{model_version}/metrics
+```
+
+---
+
+## Demo analysis (CSV-based, single shot)
+
+```
+POST /api/demo/analyze
+POST /api/analysis/analyze
+```
+Request: `{ "user_id": "ACM0001", "events": [...] }`.
+Response: `AnalyzeResponse` (is_anomaly, scores, explanation).
+
+```
+POST /api/demo/analyze-all         (admin or security_manager)
+POST /api/analysis/analyze-all
+```
+Analyzes all users end-to-end.
+
+---
+
+## My risk (employee self-service)
+
+```
+GET /api/me/overview
+```
+Returns the current user's own data (risk score, recent alerts, devices,
+logs). Used by `/my-risk` page.
+
+---
+
+## Admin accounts (admin only)
+
+```
+GET    /api/admin/accounts
+POST   /api/admin/accounts
+PATCH  /api/admin/accounts/{account_id}
+```
+
+---
+
+## Agents (Phase 1)
+
+```
+POST /api/agents/enrollment-tokens                (admin)
+```
+Request: `{ "expires_minutes": 60 }`.
+Response 201: `{ "token": "o47enr_xxx", "token_id": "...", "expires_at": "...", "created_at": "..." }`.
+
+```
+POST /api/agents/register                        (public, enrollment token in body)
+```
+Request: `{ "enrollment_token": "o47enr_xxx", "hostname": "alice-laptop", "os": "linux", "os_version": "5.15" }`.
+Response 201: `{ "agent_id": "agent-abc123", "api_key": "o47ag_xxx" }`. **The api_key is shown once.**
+
+```
+POST /api/agents/heartbeat                       (agent X-API-Key)
+```
+Request: `{ "agent_id": "agent-abc123", "status": "active" }`.
+Response 200: `{ "status": "active", "policy_version": 10, "config_version": 5 }`.
+
+```
+GET  /api/agents/me/config                       (agent X-API-Key)
+```
+Response 200:
 ```json
 {
-  "id": "1",
-  "timestamp": "2026-06-13T16:10:00+07:00",
-  "eventType": "logon",
-  "userId": "ACM0001",
-  "deviceId": "PC-1001",
-  "action": "LOGIN_SUCCESS",
-  "sourceFile": "logon.csv",
-  "sourceId": "cert-r42:logon:123",
-  "rawDetail": "Successful logon from FIN-WS-1001"
+  "agent_id": "agent-abc123",
+  "policy": { "policy_version": 10, "sampling_rate": 100, "enabled_collectors": ["logon", "http", ...] },
+  "blocklist": [{ "id": 1, "pattern": "evil.com", "pattern_type": "domain", "enabled": true, ... }],
+  "config_version": 5,
+  "fetched_at": "..."
 }
 ```
 
-## Contract nội bộ/admin
+```
+GET    /api/agents?limit=&offset=                (admin, security_manager, analyst)
+GET    /api/agents/{agent_id}
+PATCH  /api/agents/{agent_id}                     (admin)
+DELETE /api/agents/{agent_id}                     (admin)
+```
+PATCH body: `{ "status": "active"|"offline"|"revoked", "policy_version": 11, "device_id": "PC-1234", "assigned_user_id": "ACM0001" }`.
+DELETE response: revoked agent object.
 
-Các endpoints sau giữ nguyên snake_case, paginated shapes cho internal/admin use:
+```
+POST /api/admin/agents/mark-stale                (admin)
+```
+Optional `?timeout_minutes=15`. Returns `{ "flipped_to_offline": 3 }`.
 
-- `POST /api/logs/ingest` - Event ingest (trả về full event record)
-- `POST /api/users`, `PATCH /api/users/{user_id}`, `GET /api/users/{user_id}` - CRUD
-- `POST /api/devices`, `PATCH /api/devices/{device_id}`, `GET /api/devices/{device_id}` - CRUD
-- `POST /api/raw-logs/ingest`, `POST /api/raw-logs/batch`, `GET /api/raw-logs` - Raw log management
+---
 
-### Deployed OCSVM model
+## Blocklist (Phase 1)
 
-Backend không train model tại runtime. Nó load pre-trained OCSVM artifact từ `weights/ocsvm_cert_r42_chunked.joblib`.
+```
+GET    /api/agents/blocklist?enabled_only=true
+POST   /api/agents/blocklist                      (admin)
+PATCH  /api/agents/blocklist/{entry_id}           (admin)
+DELETE /api/agents/blocklist/{entry_id}           (admin)
+```
+Entry body:
+```json
+{ "pattern": "evil.com", "pattern_type": "domain", "category": "malware", "reason": "...", "enabled": true }
+```
+Entry object: `{ "id": 1, "pattern": "evil.com", "pattern_type": "domain", "category": "...", "reason": "...", "enabled": true, "created_at": "...", "updated_at": "..." }`.
 
-`GET /api/models/ocsvm-cert-r42-chunked` yêu cầu token và trả về model metadata.
+---
 
-`POST /api/models/ocsvm-cert-r42-chunked/infer` yêu cầu token.
+## Policy (Phase 1)
 
-Request:
-
+```
+GET   /api/agents/policy                          (admin, security_manager, analyst)
+PATCH /api/agents/policy                          (admin)
+```
+Response / body:
 ```json
 {
-  "features": {
-    "logon_count": 4,
-    "logon_after_hours_count": 1,
-    "logon_activity_Logoff_count": 2,
-    "logon_activity_Logon_count": 2,
-    "device_count": 1,
-    "device_after_hours_count": 0,
-    "device_activity_Connect_count": 1,
-    "device_activity_Disconnect_count": 0,
-    "file_count": 12,
-    "file_after_hours_count": 1,
-    "email_count": 3,
-    "email_after_hours_count": 0,
-    "email_size_sum": 18400,
-    "email_size_mean": 6133.33,
-    "email_size_max": 12000,
-    "email_attachments_sum": 1,
-    "email_attachments_mean": 0.33,
-    "email_attachments_max": 1,
-    "http_count": 24,
-    "http_after_hours_count": 2
-  }
+  "policy_version": 10,
+  "sampling_rate": 100,
+  "enabled_collectors": ["logon", "http", "device", "file", "email", "process", "network"],
+  "updated_at": "..."
 }
 ```
 
-Response:
+---
 
+## Admin — Normalizer + Scoring (Phase 3)
+
+```
+POST /api/admin/run-normalizer
+```
+Optional params: `batch_size`, `trigger_scoring` (default true).
+Response 200:
 ```json
 {
-  "modelVersion": "ocsvm-cert-r42-chunked",
-  "prediction": "anomaly",
-  "isAnomaly": true,
-  "scoreSamples": 0.65,
-  "decisionScore": -0.32,
-  "anomalyScore": -0.65,
-  "riskScore": 73,
-  "severity": "high",
-  "featureColumns": ["logon_count"],
-  "missingFeatures": [],
-  "extraFeatures": []
+  "started_at": "...",
+  "duration_ms": 45.2,
+  "processed": 42,
+  "failed": 0,
+  "pending_before": 0,
+  "users_with_new_events": ["ACM0001", "BTR0002"],
+  "errors": []
 }
 ```
 
-Features bị thiếu được điền bằng `0.0`; features thừa bị bỏ qua và được báo cáo.
-
-## Quy ước response
-
-- Sử dụng ISO 8601 cho timestamps.
-- Sử dụng stable IDs từ backend/database, không dùng frontend-generated IDs.
-- Frontend-facing list endpoints trả về mảng trực tiếp.
-- Admin/internal endpoints có thể dùng pagination với `{ items, total, limit, offset }`.
-- Trả về error codes machine-readable kèm messages human-readable.
-
-## Environment variables
-
-Backend:
-
-```text
-DATABASE_URL=postgresql://ueba:ueba@localhost:5432/ueba
-JWT_SECRET=change-me-in-production
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-OCSVM_MODEL_PATH=weights/ocsvm_cert_r42_chunked.joblib
-OCSVM_MODEL_VERSION=ocsvm-cert-r42-chunked
 ```
-
-Frontend (`frontend/.env.local`):
-
-```text
-VITE_API_BASE_URL=http://localhost:8000/api
+GET /api/admin/normalizer-stats
 ```
+Response 200: stats dict (see `services/normalizer.py:NormalizerStats`).
 
-## LLM Provider
+```
+POST /api/admin/score-user/{user_id}
+```
+Optional `?lookback_minutes=1440`.
+Response 200: outcome `{ user_id, is_anomaly, risk_score, alert_created, alert_id, ... }`.
 
-Alert explanation sử dụng Mistral Chat Completions:
+```
+GET /api/admin/scoring-stats
+```
+Response 200: `ScoringStats` dict.
 
-- Endpoint: `POST https://api.mistral.ai/v1/chat/completions`
-- Auth header: `Authorization: Bearer <MISTRAL_API_KEY>`
-- Model mặc định: `mistral-small-latest`
-- Config variables:
-  - `MISTRAL_API_KEY`
-  - `MISTRAL_MODEL`
-  - `MISTRAL_CHAT_COMPLETIONS_URL`
+---
 
-Nếu API key thiếu hoặc Mistral request fail, backend trả về rule-based fallback explanation.
+## OpenAPI
+
+The full schema (with request/response examples) is at:
+
+- `http://localhost:8000/docs` (Swagger UI)
+- `http://localhost:8000/redoc` (ReDoc)
+- `http://localhost:8000/openapi.json` (raw OpenAPI 3)
+
+When integrating a new client, prefer to **generate** types from the
+OpenAPI spec (e.g. `openapi-typescript` for TS clients) rather than
+hand-write them.
+
+---
+
+## Changelog
+
+- **v0.1.0** (2026-06-22): Initial release with Phase 1+3+4 endpoints.
+- Phase 2 (agent core) doesn't expose new HTTP endpoints (uses the
+  ones above with X-API-Key).
+- Phase 5b (self-update) doesn't add new HTTP endpoints (uses
+  `agent update` CLI subcommand).

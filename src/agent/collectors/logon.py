@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from src.agent.collectors.base import Collector
+from agent.collectors.base import Collector
 
 logger = logging.getLogger(__name__)
 

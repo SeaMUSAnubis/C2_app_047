@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from src.agent.transport import (
+from agent.transport import (
     AuthRevokedError,
     PermanentError,
     TransientError,

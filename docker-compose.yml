@@ -31,6 +31,10 @@ services:
       - ./artifacts:/app/artifacts
       - ./data:/app/data:ro
       - ./eval:/app/eval
+      - ./src/backend/app:/app/src/backend/app
+      - ./src/frontend/dist:/app/src/frontend/dist:ro
+      - ./requirements.txt:/app/requirements.txt:ro
+      - ./src/ml:/app/src/ml:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
       interval: 10s

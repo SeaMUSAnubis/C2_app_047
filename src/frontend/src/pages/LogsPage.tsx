@@ -5,9 +5,9 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import type { Column } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
-import { SeverityBadge } from '../components/security/SeverityBadge';
+import { SeverityBadge, StatusBadge } from '../components/security/SeverityBadge';
 import { getLogs } from '../lib/apiClient';
-import { severityOptions } from '../lib/labels';
+import { formatDateTime, severityOptions, shortText } from '../lib/labels';
 import type { EventLogItem } from '../types/security';
 
 const PAGE_SIZE = 25;
@@ -113,14 +113,14 @@ export function LogsPage() {
   }
 
   const logColumns: Column<EventLogItem>[] = [
-    { key: 'timestamp', header: 'Thời gian', sortable: true, value: (l) => l.timestamp },
-    { key: 'user', header: 'Người dùng', render: (l) => l.user ?? l.userId ?? '-' },
-    { key: 'device', header: 'Thiết bị', render: (l) => <code>{l.device ?? l.deviceId ?? '-'}</code> },
-    { key: 'eventType', header: 'Sự kiện', render: (l) => (<>{l.severity && <SeverityBadge severity={l.severity} />} <span className="event-name">{l.eventType}</span></>) },
-    { key: 'sourceIp', header: 'IP nguồn', render: (l) => l.sourceIp ?? '-' },
-    { key: 'resource', header: 'Tài nguyên', render: (l) => l.resource ?? '-' },
-    { key: 'result', header: 'Kết quả', render: (l) => <span className="status-pill">{l.result ?? '-'}</span> },
-    { key: 'riskScore', header: 'Rủi ro', align: 'right', sortable: true, value: (l) => l.riskScore ?? 0, render: (l) => <RiskScore value={l.riskScore ?? 0} size="sm" /> },
+    { key: 'timestamp', header: 'Thời gian', width: '16%', className: 'cell-nowrap', sortable: true, value: (l) => l.timestamp, render: (l) => formatDateTime(l.timestamp) },
+    { key: 'user', header: 'Người dùng', width: '14%', className: 'col-secondary', render: (l) => shortText(l.user ?? l.userId, 'Không xác định') },
+    { key: 'device', header: 'Thiết bị', width: '12%', className: 'cell-nowrap', render: (l) => <code>{shortText(l.device ?? l.deviceId, 'Không xác định')}</code> },
+    { key: 'eventType', header: 'Sự kiện', width: '17%', render: (l) => (<div className="event-cell">{l.severity && <SeverityBadge severity={l.severity} />} <span className="event-name">{shortText(l.eventType, 'Không xác định')}</span></div>) },
+    { key: 'sourceIp', header: 'IP nguồn', width: '13%', className: 'cell-nowrap col-secondary', render: (l) => shortText(l.sourceIp, 'Không xác định') },
+    { key: 'resource', header: 'Tài nguyên', width: '14%', className: 'col-optional', render: (l) => <span title={l.resource}>{shortText(l.resource, 'Chưa có')}</span> },
+    { key: 'result', header: 'Kết quả', width: '7%', className: 'col-optional', render: (l) => <StatusBadge value={l.result} /> },
+    { key: 'riskScore', header: 'Rủi ro', align: 'center', width: '7%', className: 'cell-risk', sortable: true, value: (l) => l.riskScore ?? 0, render: (l) => <RiskScore value={l.riskScore ?? 0} size="sm" /> },
   ];
 
   return (
@@ -164,18 +164,21 @@ export function LogsPage() {
         {activeSelected && <aside className="detail-panel">
           <div className="detail-icon"><FileSearch size={24} /></div>
           <span className="eyebrow">Chi tiết sự kiện</span>
-          <h2>{activeSelected.eventType}</h2>
+          <div className="detail-heading-row">
+            <h2>{activeSelected.eventType}</h2>
+            <RiskScore value={activeSelected.riskScore ?? 0} size="md" />
+          </div>
           <p>Nhật ký này được lấy từ cơ sở dữ liệu và dùng để tính điểm rủi ro cho người dùng, thiết bị và cảnh báo liên quan.</p>
           <div className="profile-grid">
-            <div><span>Người dùng</span><strong>{activeSelected.user ?? activeSelected.userId ?? '-'}</strong></div>
-            <div><span>Thiết bị</span><strong>{activeSelected.device ?? activeSelected.deviceId ?? '-'}</strong></div>
-            <div><span>IP nguồn</span><strong>{activeSelected.sourceIp ?? '-'}</strong></div>
-            <div><span>Kết quả</span><strong>{activeSelected.result ?? '-'}</strong></div>
+            <div><span>Người dùng</span><strong>{shortText(activeSelected.user ?? activeSelected.userId, 'Không xác định')}</strong></div>
+            <div><span>Thiết bị</span><strong>{shortText(activeSelected.device ?? activeSelected.deviceId, 'Không xác định')}</strong></div>
+            <div><span>IP nguồn</span><strong>{shortText(activeSelected.sourceIp, 'Không xác định')}</strong></div>
+            <div><span>Kết quả</span><StatusBadge value={activeSelected.result} /></div>
           </div>
           <h3>Tài nguyên</h3>
           <p>{activeSelected.resource ?? 'Không có tài nguyên đi kèm.'}</p>
           <h3>Thời gian</h3>
-          <p>{activeSelected.timestamp}</p>
+          <p>{formatDateTime(activeSelected.timestamp)}</p>
           <h3>Điểm rủi ro</h3>
           <RiskScore value={activeSelected.riskScore ?? 0} />
         </aside>}

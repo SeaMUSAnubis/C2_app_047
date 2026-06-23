@@ -10,13 +10,13 @@ import struct
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.agent.collectors.logon import (
+from agent.collectors.logon import (
     WTMP_FORMAT,
     WTMP_RECORD_SIZE,
     LinuxLogonCollector,
     WindowsLogonCollector,
 )
-from src.agent.config_client import AgentPolicy, ConfigClient
+from agent.config_client import AgentPolicy, ConfigClient
 
 
 def _wtmp_record(

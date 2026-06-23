@@ -647,3 +647,83 @@ class BlocklistEntryRead(BaseModel):
 class AgentPolicyUpdate(BaseModel):
     sampling_rate: int | None = Field(default=None, ge=1, le=100)
     enabled_collectors: list[AgentCollectorName] | None = None
+
+
+# ---------------------------------------------------------------------------
+# LLM / chat / memory / feedback (Phase 3.6 of PLAN_LLM.md).
+# ---------------------------------------------------------------------------
+
+
+ChatRole = Literal["user", "assistant", "system"]
+FeedbackVerdict = Literal["true_positive", "false_positive", "benign", "needs_investigation"]
+MemoryScope = Literal["user", "device", "pattern", "global"]
+MemoryKind = Literal["fact", "preference", "analyst_pattern", "historical"]
+
+
+class ChatMessageCreate(BaseModel):
+    content: str = Field(..., min_length=1, max_length=8000)
+    stream: bool = True
+    conversation_id: int | None = None
+
+
+class ChatMessageRead(BaseModel):
+    id: int
+    role: ChatRole
+    content: str
+    model: str | None = None
+    latency_ms: int | None = None
+    memory_used_ids: list[int] | None = None
+    created_at: str
+
+
+class ConversationRead(BaseModel):
+    id: int
+    alert_id: int
+    user_id: str
+    title: str
+    summary: str | None = None
+    messages: list[ChatMessageRead] = Field(default_factory=list)
+    updated_at: str
+
+
+class ConversationSummaryRead(BaseModel):
+    id: int
+    alert_id: int
+    user_id: str
+    title: str
+    message_count: int = 0
+    updated_at: str
+
+
+class ConversationCreate(BaseModel):
+    title: str | None = Field(default=None, max_length=160)
+
+
+class ConversationUpdate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=160)
+
+
+class FeedbackCreate(BaseModel):
+    verdict: FeedbackVerdict
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class FeedbackRead(BaseModel):
+    id: int
+    alert_id: int
+    analyst_id: str
+    verdict: FeedbackVerdict
+    note: str | None = None
+    created_at: str
+
+
+class MemoryRead(BaseModel):
+    id: int
+    scope: MemoryScope
+    scope_id: str | None = None
+    kind: MemoryKind
+    content: str
+    tags: list[str] = Field(default_factory=list)
+    use_count: int
+    last_used_at: str | None = None
+    created_at: str

@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.agent.config_client import (
+from agent.config_client import (
     AgentPolicy,
     BlocklistEntry,
     ConfigClient,
 )
-from src.agent.transport import PermanentError, TransientError
+from agent.transport import PermanentError, TransientError
 
 
 @pytest.fixture

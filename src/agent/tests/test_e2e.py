@@ -25,8 +25,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from src.agent.buffer import EventBuffer
-from src.agent.transport import Transport
+from agent.buffer import EventBuffer
+from agent.transport import Transport
 from src.backend.tests.conftest import postgres_tests_enabled
 
 requires_postgres = pytest.mark.skipif(
@@ -183,7 +183,7 @@ async def test_e2e_buffer_drains_via_flusher_loop() -> None:
                 )
             assert buffer.size() == 10
 
-            from src.agent.service import _flusher_loop
+            from agent.service import _flusher_loop
             stop = asyncio.Event()
 
             def stopper() -> None:
@@ -252,7 +252,7 @@ async def test_e2e_revoked_agent_cannot_send_logs() -> None:
         assert r.status_code == 200
         assert r.json()["status"] == "revoked"
 
-        from src.agent.transport import AuthRevokedError
+        from agent.transport import AuthRevokedError
         with pytest.raises(AuthRevokedError):
             transport.send_batch([{
                 "source_id": f"post-revoke:{os.getpid()}:1",

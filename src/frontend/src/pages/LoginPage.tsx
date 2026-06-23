@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Activity, LockKeyhole } from 'lucide-react';
 import { login as loginRequest } from '../lib/apiClient';
 import { useAuth } from '../store/useAuth';
+import { LegalBanner } from '../components/security/LegalBanner';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('admin@demo.com');
@@ -37,6 +38,7 @@ export default function LoginPage() {
         <h1>Phát hiện mối đe dọa nội bộ bằng UEBA &amp; Machine Learning</h1>
         <p>Giám sát hành vi người dùng và thiết bị, phát hiện lệch hồ sơ chuẩn và cảnh báo bất thường theo thời gian thực.</p>
         <div className="login-signal"><span>OCSVM</span><span>Phát hiện bất thường</span><span>Sẵn sàng tích hợp SIEM</span></div>
+        <LegalBanner variant="full" />
       </section>
 
       <form className="login-card" onSubmit={handleLogin}>
@@ -47,6 +49,7 @@ export default function LoginPage() {
         <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
         <label>Mật khẩu<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
         <button className="primary-action full" type="submit" disabled={loading}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</button>
+        <LegalBanner variant="compact" />
         <div className="demo-accounts">
           <strong>Tài khoản demo</strong>
           <span>Quản trị: admin@demo.com / admin123</span>
