@@ -120,9 +120,16 @@ def _parse_date(s: str) -> str:
 
 
 def _events_for(event_type: str) -> list[dict]:
-    """Read a mock CSV and transform rows into EventIngest dicts."""
+    """Read a mock CSV and transform rows into EventIngest dicts.
+
+    Deduplicates by logical key (timestamp, user_id, device_id,
+    event_type, resource) so that running import multiple times with
+    regenerated mock data does not create duplicate event_logs rows.
+    """
     rows = _read_csv(MOCK_DIR / f"{event_type}.csv")
     out = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    skipped = 0
     for r in rows:
         sid = f"mock:{event_type}:{r['id']}"
         action = (r.get("activity") or "").lower() or None
@@ -138,10 +145,19 @@ def _events_for(event_type: str) -> list[dict]:
             resource = r.get("pc")
         else:
             resource = None
+        ts = _parse_date(r["date"])
+        uid = r.get("user") or ""
+        did = r.get("pc") or ""
+        res = resource or ""
+        logical_key = (ts, uid, did, event_type, res)
+        if logical_key in seen:
+            skipped += 1
+            continue
+        seen.add(logical_key)
         out.append({
             "source_id": sid,
             "source_file": f"mock/{event_type}.csv",
-            "timestamp": _parse_date(r["date"]),
+            "timestamp": ts,
             "user_id": r.get("user") or None,
             "device_id": r.get("pc") or None,
             "event_type": event_type,
@@ -150,6 +166,8 @@ def _events_for(event_type: str) -> list[dict]:
             "metadata": {"synthetic": True, "dataset": "mock"},
             "raw": r,
         })
+    if skipped:
+        print(f"  {event_type}: skipped {skipped} logical duplicate(s)")
     return out
 
 
@@ -307,8 +325,22 @@ def import_direct(verbose: bool = True) -> dict:
             events = _events_for(et)
             now = utc_now()
             ok = 0
+            skipped = 0
             for ev in events:
                 try:
+                    # Check for logical duplicate before inserting.
+                    existing = conn.execute(
+                        """SELECT id FROM event_logs
+                           WHERE timestamp = %s AND user_id = %s
+                             AND device_id = %s AND event_type = %s
+                             AND resource = %s
+                           LIMIT 1""",
+                        (ev["timestamp"], ev["user_id"], ev["device_id"],
+                         ev["event_type"], ev["resource"]),
+                    ).fetchone()
+                    if existing:
+                        skipped += 1
+                        continue
                     conn.execute(
                         """
                         INSERT INTO event_logs (
@@ -335,7 +367,7 @@ def import_direct(verbose: bool = True) -> dict:
                     out["errors"].append(f"{et}: {exc}")
             out["logs"] += ok
             if verbose:
-                print(f"  {et}: {ok}/{len(events)} inserted")
+                print(f"  {et}: {ok}/{len(events)} inserted, {skipped} skipped (already exist)")
 
     out["total_errors"] = len(out["errors"])
     return out

@@ -119,8 +119,14 @@ def load_csv_data(conn):
                 resource = optional_text(row_dict.get("resource")) or ""
 
                 raw_json = json.dumps(row_dict)
+                # Prefix source_id with the same format used by load_all_data.py
+                # and load_demo_data.py so running multiple import scripts on the
+                # same dataset won't create duplicate event_logs with different
+                # source_ids (e.g. one with "cert-r42:logon:ABC" and another with
+                # just "ABC").
+                prefixed_source_id = f"cert-r42:{event_type}:{source_id}"
                 records.append((
-                    source_id, filename, timestamp, user_id, device_id, event_type,
+                    prefixed_source_id, filename, timestamp, user_id, device_id, event_type,
                     action, resource, "{}", raw_json, now
                 ))
 
@@ -135,7 +141,16 @@ def load_csv_data(conn):
                             action, resource, metadata_json, raw_json, created_at
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT(source_id) DO NOTHING
+                        ON CONFLICT(source_id) DO UPDATE SET
+                            source_file = excluded.source_file,
+                            timestamp = excluded.timestamp,
+                            user_id = excluded.user_id,
+                            device_id = excluded.device_id,
+                            event_type = excluded.event_type,
+                            action = excluded.action,
+                            resource = excluded.resource,
+                            metadata_json = excluded.metadata_json,
+                            raw_json = excluded.raw_json
                         """,
                         records[i:i+chunk_size]
                     )
