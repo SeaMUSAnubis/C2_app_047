@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.agent.state import (
+from agent.state import (
     STATE_FILE_MODE,
     AgentState,
     clear_state,

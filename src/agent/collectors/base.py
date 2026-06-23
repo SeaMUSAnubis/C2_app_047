@@ -24,7 +24,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from src.agent.config_client import ConfigClient
+from agent.config_client import ConfigClient
 
 logger = logging.getLogger(__name__)
 

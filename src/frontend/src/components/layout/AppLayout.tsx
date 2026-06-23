@@ -1,6 +1,6 @@
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { Activity, Bell, BrainCircuit, FileSearch, Gauge, LogOut, Monitor, Search, ShieldAlert, ShieldBan, UserCog, Users } from 'lucide-react';
+import { Activity, Bell, BrainCircuit, Cpu, FileSearch, Gauge, LogOut, Monitor, Search, ShieldAlert, ShieldBan, UserCog, Users, Brain } from 'lucide-react';
 import { useAuth } from '../../store/useAuth';
 import { roleLabel } from '../../lib/labels';
 
@@ -19,11 +19,16 @@ const employeeNavItems = [
 ];
 
 const adminNavItems = [
+  { label: 'Endpoint agents', path: '/admin/agents', icon: Cpu },
+  { label: 'Blocklist', path: '/admin/blocklist', icon: ShieldBan },
   { label: 'Website bị chặn', path: '/admin/blocked-websites', icon: ShieldBan },
+  { label: 'LLM Memory', path: '/admin/llm-memory', icon: Brain },
   { label: 'Tài khoản hệ thống', path: '/admin/accounts', icon: UserCog },
 ];
 
 const securityManagerNavItems = [
+  { label: 'Endpoint agents', path: '/admin/agents', icon: Cpu },
+  { label: 'Blocklist', path: '/admin/blocklist', icon: ShieldBan },
   { label: 'Website bị chặn', path: '/admin/blocked-websites', icon: ShieldBan },
 ];
 

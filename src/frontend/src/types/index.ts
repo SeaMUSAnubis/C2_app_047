@@ -112,3 +112,61 @@ export interface BlockedWebsite {
   created_at: string;
   updated_at?: string;
 }
+
+// --- Phase 4: agent + blocklist CRUD ---
+
+export type AgentStatus = "enrolled" | "active" | "offline" | "revoked";
+export type BlocklistPatternType = "domain" | "url" | "ip" | "regex";
+
+export interface AgentEntity {
+  agent_id: string;
+  hostname: string;
+  os?: string | null;
+  os_version?: string | null;
+  device_id?: string | null;
+  assigned_user_id?: string | null;
+  status: AgentStatus;
+  policy_version: number;
+  last_heartbeat?: string | null;
+  last_config_pull?: string | null;
+  enrolled_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlocklistEntry {
+  id: number;
+  pattern: string;
+  pattern_type: BlocklistPatternType;
+  category?: string | null;
+  reason?: string | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentConfigResponse {
+  agent_id: string;
+  policy: {
+    policy_version: number;
+    sampling_rate: number;
+    enabled_collectors: string[];
+  };
+  blocklist: BlocklistEntry[];
+  config_version: number;
+  fetched_at: string;
+}
+
+export interface AgentEnrollmentToken {
+  token: string;
+  token_id: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface AgentPolicyRead {
+  policy_version: number;
+  sampling_rate: number;
+  enabled_collectors: string[];
+  updated_at: string;
+}

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.agent.buffer import EventBuffer
+from agent.buffer import EventBuffer
 
 
 @pytest.fixture

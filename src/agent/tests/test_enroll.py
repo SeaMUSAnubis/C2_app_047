@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import pytest
 
-from src.agent.config import AgentConfig
-from src.agent.enroll import enroll
-from src.agent.transport import PermanentError, TransientError
+from agent.config import AgentConfig
+from agent.enroll import enroll
+from agent.transport import PermanentError, TransientError
 
 
 def _config(tmp_path: Path, enrollment_token: str = "o47enr_tok") -> AgentConfig:
@@ -22,7 +22,7 @@ def _config(tmp_path: Path, enrollment_token: str = "o47enr_tok") -> AgentConfig
 
 def test_enroll_creates_state_file(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "agent-abc123",
@@ -40,7 +40,7 @@ def test_enroll_creates_state_file(tmp_path: Path) -> None:
 
 def test_enroll_writes_correct_state(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "agent-xyz",
@@ -49,7 +49,7 @@ def test_enroll_writes_correct_state(tmp_path: Path) -> None:
             "issued_at": "t",
         }
         enroll(cfg)
-    from src.agent.state import load_state
+    from agent.state import load_state
     s = load_state(cfg.state_path)
     assert s is not None
     assert s.agent_id == "agent-xyz"
@@ -62,13 +62,13 @@ def test_enroll_writes_correct_state(tmp_path: Path) -> None:
 def test_enroll_uses_resolved_hostname(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
     cfg.hostname = "WS-EXPLICIT-001"
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "api_key": "k", "policy_version": 1, "issued_at": "t",
         }
         enroll(cfg)
-    from src.agent.state import load_state
+    from agent.state import load_state
     s = load_state(cfg.state_path)
     assert s.hostname == "WS-EXPLICIT-001"
 
@@ -81,7 +81,7 @@ def test_enroll_does_not_auto_set_assigned_user_id(tmp_path: Path) -> None:
     from LDAP). Auto-setting would cause a FK violation.
     """
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "api_key": "k", "policy_version": 1, "issued_at": "t",
@@ -98,7 +98,7 @@ def test_enroll_uses_hostname_as_default_device_id(tmp_path: Path) -> None:
     """
     cfg = _config(tmp_path)
     cfg.hostname = "WS-XYZ"
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "api_key": "k", "policy_version": 1, "issued_at": "t",
@@ -111,7 +111,7 @@ def test_enroll_uses_hostname_as_default_device_id(tmp_path: Path) -> None:
 
 def test_enroll_uses_explicit_device_id(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "api_key": "k", "policy_version": 1, "issued_at": "t",
@@ -124,7 +124,7 @@ def test_enroll_uses_explicit_device_id(tmp_path: Path) -> None:
 
 def test_enroll_calls_register_with_correct_payload(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "api_key": "k", "policy_version": 1, "issued_at": "t",
@@ -147,7 +147,7 @@ def test_enroll_refuses_when_token_missing(tmp_path: Path) -> None:
 def test_enroll_refuses_when_state_exists_without_overwrite(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
     # First enrollment.
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "api_key": "k", "policy_version": 1, "issued_at": "t",
@@ -160,7 +160,7 @@ def test_enroll_refuses_when_state_exists_without_overwrite(tmp_path: Path) -> N
 
 def test_enroll_overwrites_when_requested(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.side_effect = [
             {"agent_id": "a1", "api_key": "k1", "policy_version": 1, "issued_at": "t"},
@@ -168,7 +168,7 @@ def test_enroll_overwrites_when_requested(tmp_path: Path) -> None:
         ]
         enroll(cfg)
         enroll(cfg, overwrite=True)
-    from src.agent.state import load_state
+    from agent.state import load_state
     s = load_state(cfg.state_path)
     assert s is not None
     assert s.agent_id == "a2"
@@ -177,7 +177,7 @@ def test_enroll_overwrites_when_requested(tmp_path: Path) -> None:
 
 def test_enroll_propagates_permanent_error(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.side_effect = PermanentError("Invalid token")
         with pytest.raises(PermanentError):
@@ -187,7 +187,7 @@ def test_enroll_propagates_permanent_error(tmp_path: Path) -> None:
 
 def test_enroll_propagates_transient_error(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.side_effect = TransientError("Network down")
         with pytest.raises(TransientError):
@@ -197,7 +197,7 @@ def test_enroll_propagates_transient_error(tmp_path: Path) -> None:
 
 def test_enroll_rejects_response_missing_api_key(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "policy_version": 1, "issued_at": "t",
@@ -209,7 +209,7 @@ def test_enroll_rejects_response_missing_api_key(tmp_path: Path) -> None:
 
 def test_enroll_closes_transport_on_error(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.side_effect = TransientError("boom")
         with pytest.raises(TransientError):
@@ -219,7 +219,7 @@ def test_enroll_closes_transport_on_error(tmp_path: Path) -> None:
 
 def test_enroll_closes_transport_on_success(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
-    with patch("src.agent.enroll.Transport") as MockTransport:
+    with patch("agent.enroll.Transport") as MockTransport:
         mock_t = MockTransport.return_value
         mock_t.register.return_value = {
             "agent_id": "a", "api_key": "k", "policy_version": 1, "issued_at": "t",

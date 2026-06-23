@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.agent.transport import PermanentError, TransientError, Transport
+from agent.transport import PermanentError, TransientError, Transport
 
 logger = logging.getLogger(__name__)
 

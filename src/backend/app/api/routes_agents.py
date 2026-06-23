@@ -170,7 +170,8 @@ async def list_agents_endpoint(
     _ = current_account
     items = [_serialize_agent(r) for r in agent_db.list_agents(status_filter, limit, offset)]
     total = agent_db.count_agents(status_filter)
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    # Frontend uses `rows` consistently (apiClient.requestWithTotal) — return both keys.
+    return {"rows": items, "items": items, "total": total, "limit": limit, "offset": offset}
 
 
 # ---------------------------------------------------------------------------

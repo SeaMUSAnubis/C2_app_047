@@ -27,16 +27,21 @@ import threading
 import time
 from typing import Any
 
-from src.agent import __version__
-from src.agent.buffer import EventBuffer
-from src.agent.collectors.base import Collector
-from src.agent.collectors.http_dns import build_http_collectors
-from src.agent.collectors.logon import LinuxLogonCollector
-from src.agent.config import AgentConfig, is_linux
-from src.agent.config_client import ConfigClient
-from src.agent.legal import render_banner
-from src.agent.state import load_state
-from src.agent.transport import (
+from agent import __version__
+from agent.buffer import EventBuffer
+from agent.collectors.base import Collector
+from agent.collectors.device import LinuxDeviceCollector, WindowsDeviceCollector
+from agent.collectors.email import EmailCollector
+from agent.collectors.file import ProgrammaticFileCollector
+from agent.collectors.http_dns import build_http_collectors
+from agent.collectors.logon import LinuxLogonCollector
+from agent.collectors.network import ProgrammaticNetworkCollector
+from agent.collectors.process import ProgrammaticProcessCollector
+from agent.config import AgentConfig, is_linux
+from agent.config_client import ConfigClient
+from agent.legal import render_banner
+from agent.state import load_state
+from agent.transport import (
     AuthRevokedError,
     PermanentError,
     TransientError,
@@ -71,14 +76,27 @@ def _build_collectors(
     We add every collector that COULD be enabled, then filter to only those
     that are enabled by the policy. Collectors that are not enabled are
     not started.
+
+    For Phase 4 the cross-platform programmatic collectors (file / process /
+    network) are added unconditionally. The OS-specific ones (logon, device)
+    are added per-platform; their non-Linux counterparts are stubs that mark
+    themselves unhealthy on start.
     """
     candidates: list[Collector] = []
     if is_linux():
         candidates.append(LinuxLogonCollector(config_client))
     else:
-        from src.agent.collectors.logon import WindowsLogonCollector
+        from agent.collectors.logon import WindowsLogonCollector
         candidates.append(WindowsLogonCollector(config_client))
+    if is_linux():
+        candidates.append(LinuxDeviceCollector(config_client))
+    else:
+        candidates.append(WindowsDeviceCollector(config_client))
     candidates.extend(build_http_collectors(config_client))
+    candidates.append(EmailCollector(config_client))
+    candidates.append(ProgrammaticFileCollector(config_client))
+    candidates.append(ProgrammaticProcessCollector(config_client))
+    candidates.append(ProgrammaticNetworkCollector(config_client))
     enabled = [c for c in candidates if config_client.policy.is_collector_enabled(c.name)]
     logger.info(
         "Collectors: candidates=%s, enabled=%s",

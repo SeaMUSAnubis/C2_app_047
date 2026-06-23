@@ -3,6 +3,7 @@ uvicorn[standard]>=0.27
 pydantic>=2.6
 pydantic-settings>=2.2
 psycopg[binary]>=3.2
+psycopg-pool>=3.2
 pandas>=2.0
 numpy>=1.26
 scikit-learn>=1.4

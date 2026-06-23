@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Filter, Search, ShieldAlert } from 'lucide-react';
+import { Filter, MessageSquare, Search, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
-import { SeverityBadge } from '../components/security/SeverityBadge';
+import { SeverityBadge, StatusBadge } from '../components/security/SeverityBadge';
+import { AlertDetailModal } from '../features/alerts/AlertDetailModal';
 import { getAlerts } from '../lib/apiClient';
-import { severityOptions, statusLabel, statusOptions } from '../lib/labels';
+import { formatDateTime, severityOptions, shortText, statusOptions } from '../lib/labels';
 import type { AlertItem } from '../types/security';
 
 const PAGE_SIZE = 25;
@@ -14,6 +15,7 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [selected, setSelected] = useState<AlertItem | null>(null);
+  const [chatAlert, setChatAlert] = useState<AlertItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -107,13 +109,35 @@ export default function AlertsPage() {
           {!loading && !error && alerts.length > 0 && filteredAlerts.length === 0 && <p>Không có cảnh báo khớp bộ lọc.</p>}
           <DataTable<AlertItem>
             columns={[
-              { key: 'title', header: 'Cảnh báo', render: (a) => (<><strong>{a.title}</strong><span className="muted-line">{a.id}</span></>) },
-              { key: 'user', header: 'Thực thể' },
-              { key: 'device', header: 'Thiết bị', render: (a) => <code>{a.device}</code> },
-              { key: 'severity', header: 'Mức độ', render: (a) => <SeverityBadge severity={a.severity} />, sortable: true, value: (a) => a.severity },
-              { key: 'riskScore', header: 'Rủi ro', align: 'right', sortable: true, value: (a) => a.riskScore, render: (a) => <RiskScore value={a.riskScore} size="sm" /> },
-              { key: 'status', header: 'Trạng thái', render: (a) => <span className="status-pill">{statusLabel(a.status)}</span> },
-              { key: 'time', header: 'Thời gian', align: 'right' },
+              { key: 'title', header: 'Cảnh báo', width: '24%', render: (a) => (<div className="cell-main" title={a.title}><strong>{a.title}</strong><span className="muted-line">{a.id}</span></div>) },
+              { key: 'user', header: 'Thực thể', width: '14%', className: 'col-secondary', render: (a) => <span title={a.user}>{shortText(a.user, 'Không xác định')}</span> },
+              { key: 'device', header: 'Thiết bị', width: '11%', className: 'cell-nowrap', render: (a) => <code>{shortText(a.device, 'Không xác định')}</code> },
+              { key: 'severity', header: 'Mức độ', width: '11%', render: (a) => <SeverityBadge severity={a.severity} />, sortable: true, value: (a) => a.severity },
+              { key: 'riskScore', header: 'Rủi ro', align: 'center', width: '9%', className: 'cell-risk', sortable: true, value: (a) => a.riskScore, render: (a) => <RiskScore value={a.riskScore} size="sm" /> },
+              { key: 'status', header: 'Trạng thái', width: '12%', className: 'col-secondary', render: (a) => <StatusBadge value={a.status} /> },
+              { key: 'time', header: 'Thời gian', align: 'right', width: '14%', className: 'cell-nowrap col-optional', render: (a) => formatDateTime(a.timestamp ?? a.time) },
+              {
+                key: 'chat',
+                header: 'AI',
+                align: 'center',
+                width: '5%',
+                className: 'cell-action',
+                render: (a) => a.numericId != null ? (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title="Thảo luận với AI"
+                    aria-label="Thảo luận với AI"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected(a);
+                      setChatAlert(a);
+                    }}
+                  >
+                    <MessageSquare size={16} />
+                  </button>
+                ) : null,
+              },
             ]}
             rows={filteredAlerts}
             rowKey={(a) => a.id}
@@ -130,21 +154,68 @@ export default function AlertsPage() {
         {selected && <aside className="detail-panel">
           <div className="detail-icon"><ShieldAlert size={24} /></div>
           <span className="eyebrow">Chi tiết cảnh báo</span>
-          <h2>{selected.title}</h2>
-          <p>{selected.explanation}</p>
-          <div className="detail-meta">
-            <span>{selected.user}</span>
-            <span>{selected.device}</span>
-            <SeverityBadge severity={selected.severity} />
+          <div className="detail-heading-row">
+            <h2>{selected.title}</h2>
+            <RiskScore value={selected.riskScore} size="md" />
           </div>
-          <h3>Bằng chứng</h3>
-          <ul>{(selected.evidence ?? []).map((item) => <li key={item}>{item}</li>)}</ul>
-          <h3>Hành động khuyến nghị</h3>
-          <p>{selected.action}</p>
-          <h3>Thẻ kỹ thuật</h3>
-          <span className="mitre-tag">{selected.mitre}</span>
+          <div className="detail-block">
+            <h3>Tóm tắt cảnh báo</h3>
+            <p>{shortText(selected.explanation, 'Chưa có giải thích từ hệ thống.')}</p>
+          </div>
+          <div className="detail-meta">
+            <span>{shortText(selected.user, 'Không xác định')}</span>
+            <span>{shortText(selected.device, 'Không xác định')}</span>
+            <SeverityBadge severity={selected.severity} />
+            <StatusBadge value={selected.status} />
+          </div>
+          <div className="detail-block">
+            <h3>Thực thể liên quan</h3>
+            <div className="profile-grid compact">
+              <div><span>Người dùng</span><strong>{shortText(selected.user, 'Không xác định')}</strong></div>
+              <div><span>Thiết bị</span><strong>{shortText(selected.device, 'Không xác định')}</strong></div>
+              <div><span>Thời gian</span><strong>{formatDateTime(selected.timestamp ?? selected.time)}</strong></div>
+              <div><span>Trạng thái</span><strong>{shortText(selected.status)}</strong></div>
+            </div>
+          </div>
+          <div className="detail-block">
+            <h3>Bằng chứng</h3>
+            {(selected.evidence ?? []).length > 0 ? <ul>{(selected.evidence ?? []).map((item) => <li key={item}>{item}</li>)}</ul> : <p>Chưa có bằng chứng chi tiết.</p>}
+          </div>
+          <div className="detail-block">
+            <h3>Khuyến nghị xử lý</h3>
+            <p>{shortText(selected.action, 'Xem xét phiên đăng nhập, thiết bị liên quan và xác minh với chủ sở hữu.')}</p>
+          </div>
+          <div className="detail-block">
+            <h3>Thẻ kỹ thuật</h3>
+            <span className="mitre-tag">{shortText(selected.mitre, 'Không xác định')}</span>
+          </div>
+          {selected.numericId != null && (
+            <button
+              type="button"
+              className="primary-action"
+              style={{ marginTop: 16, width: '100%' }}
+              onClick={() => setChatAlert(selected)}
+            >
+              <MessageSquare size={16} />
+              Thảo luận với AI
+            </button>
+          )}
         </aside>}
       </section>
+      {chatAlert && chatAlert.numericId != null && (
+        <AlertDetailModal
+          alert={{
+            id: chatAlert.numericId,
+            title: chatAlert.title,
+            severity: chatAlert.severity,
+            explanation: chatAlert.explanation ?? null,
+            user: chatAlert.user,
+            device: chatAlert.device,
+            risk_score: chatAlert.riskScore,
+          }}
+          onClose={() => setChatAlert(null)}
+        />
+      )}
     </div>
   );
 }

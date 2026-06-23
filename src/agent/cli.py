@@ -4,20 +4,26 @@ Subcommands:
 - enroll   : register a new agent (run once per host)
 - run      : start the service (foreground; use systemd / NSSM in production)
 - version  : print version and exit
+- update   : self-update the running binary to the latest release
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
+import os
 import sys
 from pathlib import Path
 
-from src.agent import __version__
-from src.agent.config import AgentConfig
-from src.agent.enroll import enroll as enroll_fn
-from src.agent.service import AgentService
-from src.agent.transport import PermanentError, TransientError
+from agent import __version__
+from agent.config import AgentConfig
+from agent.enroll import enroll as enroll_fn
+from agent.service import AgentService
+from agent.transport import PermanentError, TransientError
+from agent.update import DEFAULT_RELEASE_URL, update_binary
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,6 +57,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--buffer-max-events", type=int, default=None)
     p_run.add_argument("--heartbeat-interval", type=float, default=None)
     p_run.add_argument("--config-pull-interval", type=float, default=None)
+
+    p_update = sub.add_parser("update", help="self-update to the latest release")
+    p_update.add_argument(
+        "--release-url", default=os.environ.get("UEBA_RELEASE_URL", DEFAULT_RELEASE_URL),
+        help="base URL for releases (default: %(default)s)",
+    )
+    p_update.add_argument(
+        "--version", default=os.environ.get("UEBA_VERSION", "latest"),
+        help="version to update to (default: latest)",
+    )
+    p_update.add_argument(
+        "--skip-verify", action="store_true",
+        help="skip SHA256 check (NOT recommended)",
+    )
+    p_update.add_argument(
+        "--dry-run", action="store_true",
+        help="download + verify, but don't replace the running binary",
+    )
 
     return parser
 
@@ -115,6 +139,67 @@ def cmd_run(args: argparse.Namespace) -> int:
     return asyncio.run(service.run())
 
 
+def cmd_update(args: argparse.Namespace) -> int:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
+    )
+    if args.dry_run:
+        # Verify the URL is reachable and checksum matches, but don't replace.
+        try:
+            import tempfile
+
+            from agent.update import (
+                _download,
+                _parse_sha256sums,
+                _sha256_of,
+                detect_target,
+            )
+            os_name, arch = detect_target()
+            ext = ".exe" if os_name == "windows" else ""
+            binary_name = f"agent-{os_name}-{arch}{ext}"
+            with tempfile.TemporaryDirectory(prefix="ueba-agent-dryrun-") as tmp:
+                sums = Path(tmp) / "SHA256SUMS"
+                new = Path(tmp) / binary_name
+                _download(f"{args.release_url}/SHA256SUMS", sums)
+                _download(f"{args.release_url}/{binary_name}", new)
+                expected = _parse_sha256sums(sums, binary_name)
+                actual = _sha256_of(new)
+                print(f"  expected SHA256: {expected}")
+                print(f"  actual   SHA256: {actual}")
+                if expected == actual:
+                    print(f"  OK: {binary_name} would update cleanly (current: agent {__version__})")
+                    return 0
+                print("  MISMATCH — refusing to install")
+                return 1
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+    try:
+        dest, old_v, new_v = update_binary(
+            release_url=args.release_url,
+            version=args.version,
+            skip_verify=args.skip_verify,
+        )
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print(f"Updated: {old_v} -> {new_v} ({dest})")
+    if sys.platform in ("win32", "cygwin"):
+        print(
+            "Windows: the running .exe is held open. The new version was "
+            "staged as <bin>.new; it will be swapped on next service start."
+        )
+    else:
+        # Try to restart via the supervisor.
+        from agent.update import _restart_service_via_supervisor
+
+        if _restart_service_via_supervisor():
+            print("Service restarted under the new binary.")
+        else:
+            print("Restart the service manually to load the new binary.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -124,6 +209,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_enroll(args)
     if args.command == "run":
         return cmd_run(args)
+    if args.command == "update":
+        return cmd_update(args)
     parser.error(f"unknown command: {args.command}")
     return 1  # unreachable
 

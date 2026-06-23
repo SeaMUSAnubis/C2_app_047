@@ -1,0 +1,8 @@
+# Minimal runtime dependencies for the UEBA endpoint agent.
+# Server-side deps (FastAPI, pandas, scikit-learn, etc.) are NOT included.
+# Install with: pip install -r requirements-agent.txt
+# (or: pip install ueba-agent from the wheel built via pyproject.toml)
+
+httpx>=0.27
+pydantic>=2.6
+pydantic-settings>=2.2

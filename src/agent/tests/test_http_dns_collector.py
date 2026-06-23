@@ -10,12 +10,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.agent.collectors.http_dns import (
+from agent.collectors.http_dns import (
     DnsSniffCollector,
     DomainCheckCollector,
     _HttpBlockMixin,
 )
-from src.agent.config_client import AgentPolicy, BlocklistEntry, ConfigClient
+from agent.config_client import AgentPolicy, BlocklistEntry, ConfigClient
 
 
 def _make_config_client(policy: AgentPolicy) -> ConfigClient:
