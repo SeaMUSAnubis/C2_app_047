@@ -163,7 +163,7 @@ def import_via_api(server_url: str, email: str, password: str,
     import httpx
 
     base = server_url.rstrip("/")
-    out: dict[str, Any] = {"users": 0, "devices": 0, "logs": 0, "errors": []}
+    out: dict[str, Any] = {"users": 0, "users_existed": 0, "devices": 0, "devices_existed": 0, "logs": 0, "errors": []}
 
     with httpx.Client(base_url=base, timeout=30.0) as client:
         # 1. Login.
@@ -181,6 +181,7 @@ def import_via_api(server_url: str, email: str, password: str,
                 out["users"] += 1
             elif r.status_code == 409:
                 users_existed += 1
+                out["users_existed"] += 1
             else:
                 out["errors"].append(f"user {u['id']}: {r.status_code} {r.text[:120]}")
         if verbose:
@@ -197,6 +198,7 @@ def import_via_api(server_url: str, email: str, password: str,
                 out["devices"] += 1
             elif r.status_code == 409:
                 devices_existed += 1
+                out["devices_existed"] += 1
             else:
                 out["errors"].append(f"device {d['id']}: {r.status_code} {r.text[:120]}")
         if verbose:
@@ -392,8 +394,10 @@ def main() -> int:
 
     print()
     print("=" * 50)
-    print(f"Users:   {result['users']}")
-    print(f"Devices: {result['devices']}")
+    total_users = result.get("users", 0) + result.get("users_existed", 0)
+    total_devices = result.get("devices", 0) + result.get("devices_existed", 0)
+    print(f"Users:   {total_users} ({result.get('users', 0)} mới, {result.get('users_existed', 0)} đã có)")
+    print(f"Devices: {total_devices} ({result.get('devices', 0)} mới, {result.get('devices_existed', 0)} đã có)")
     print(f"Logs:    {result['logs']}")
     print(f"Errors:  {result['total_errors']}")
     if result["errors"]:
