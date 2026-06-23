@@ -1,7 +1,7 @@
-import pytest
 from src.models.explanation import AlertExplanationRequest
 from src.services.llm.explanation_service import generate_explanation
 from src.services.llm.guardrails import sanitize_input_request
+
 
 def test_guardrails_redact_secrets():
     req = AlertExplanationRequest(
@@ -25,8 +25,8 @@ def test_fallback_explanation():
     assert res.generated_by == "rule_based"
 
 def test_hallucination_prevention():
-    from src.services.llm.guardrails import validate_llm_response
     from src.models.explanation import AlertExplanationResponse
+    from src.services.llm.guardrails import validate_llm_response
     
     req = AlertExplanationRequest(
         alert_id="h1", user_id="u", severity="high", risk_score=80, alert_status="new"
@@ -52,8 +52,8 @@ def test_missing_evidence():
     assert "Hệ thống giải thích AI đang không khả dụng" in " ".join(res.limitations)
 
 def test_prompt_injection():
-    from src.services.llm.prompt_builder import build_user_prompt
     from src.models.explanation import TimelineEventInput
+    from src.services.llm.prompt_builder import build_user_prompt
     
     req = AlertExplanationRequest(
         alert_id="p1", user_id="u", severity="low", risk_score=10, alert_status="new",

@@ -1,5 +1,4 @@
 import re
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -42,7 +41,7 @@ def validate_llm_response(raw_json: str, request: AlertExplanationRequest) -> Al
     try:
         response = AlertExplanationResponse.model_validate_json(raw_json)
     except ValidationError as e:
-        raise ValueError(f"LLM output failed schema validation: {e}")
+        raise ValueError(f"LLM output failed schema validation: {e}") from e
 
     # Check that alert metadata was preserved
     if response.alert_id != request.alert_id:

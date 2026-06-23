@@ -2,8 +2,7 @@ import hashlib
 import json
 import logging
 import uuid
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.models.explanation import AlertExplanationRequest, AlertExplanationResponse
 from src.services.llm.client import LLMClient
@@ -86,7 +85,7 @@ def generate_explanation(request: AlertExplanationRequest) -> AlertExplanationRe
     # Metadata enforcement
     response.trace_id = trace_id
     response.generated_by = "llm"
-    response.generated_at = datetime.now(timezone.utc)
+    response.generated_at = datetime.now(UTC)
     response.model_name = client.model
     response.prompt_version = client.provider  # Just a placeholder or from config
     response.evidence_hash = compute_evidence_hash(sanitized_request)

@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-import uuid
+from datetime import UTC, datetime
 
 from src.config import settings
 from src.models.explanation import (
@@ -93,6 +92,6 @@ def generate_fallback_explanation(request: AlertExplanationRequest, trace_id: st
         risk_score=request.risk_score,
         severity=request.severity,
         safety_flags=[],
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         trace_id=trace_id
     )

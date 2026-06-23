@@ -1,8 +1,6 @@
 import json
-from typing import Any
 
 from src.models.explanation import AlertExplanationRequest
-
 
 SYSTEM_PROMPT = """You are a cybersecurity alert explanation assistant for a UEBA system.
 

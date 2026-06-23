@@ -1,5 +1,3 @@
-import json
-from typing import Any
 
 import httpx
 
@@ -72,6 +70,6 @@ class LLMClient:
             except Exception as e:
                 retries += 1
                 if retries > self.max_retries:
-                    raise Exception(f"Failed after {self.max_retries} retries. Error: {str(e)}")
+                    raise Exception(f"Failed after {self.max_retries} retries. Error: {str(e)}") from e
         
         raise Exception("LLM generation failed.")

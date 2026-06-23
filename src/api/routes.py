@@ -5,6 +5,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 
 from src.config import settings
+from src.models.explanation import (
+    AlertExplanationRequest,
+    AlertExplanationResponse,
+    AnomalyFeatureInput,
+)
 from src.models.schemas import (
     AccountPublic,
     AnalyzeRequest,
@@ -36,13 +41,12 @@ from src.models.schemas import (
 )
 from src.services import database
 from src.services.auth import create_access_token, decode_access_token, verify_password
+from src.services.llm.explanation_service import generate_explanation
 from src.services.ueba_ml.inference import (
     ModelArtifactError,
     get_ocsvm_metrics,
     run_ocsvm_inference,
 )
-from src.models.explanation import AlertExplanationRequest, AlertExplanationResponse, AnomalyFeatureInput
-from src.services.llm.explanation_service import generate_explanation
 
 router = APIRouter()
 security = HTTPBearer()
