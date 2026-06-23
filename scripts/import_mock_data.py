@@ -174,29 +174,36 @@ def import_via_api(server_url: str, email: str, password: str,
         h = {"Authorization": f"Bearer {token}"}
 
         # 2. Users.
+        users_existed = 0
         for u in _load_users():
             r = client.post("/api/users", headers=h, json=u)
             if r.status_code in (200, 201):
                 out["users"] += 1
             elif r.status_code == 409:
-                # Already exists — that's fine.
-                pass
+                users_existed += 1
             else:
                 out["errors"].append(f"user {u['id']}: {r.status_code} {r.text[:120]}")
         if verbose:
-            print(f"  Users: {out['users']} created/updated")
+            parts = [f"{out['users']} mới"]
+            if users_existed:
+                parts.append(f"{users_existed} đã tồn tại")
+            print(f"  Users: {', '.join(parts)}")
 
         # 3. Devices.
+        devices_existed = 0
         for d in _load_devices():
             r = client.post("/api/devices", headers=h, json=d)
             if r.status_code in (200, 201):
                 out["devices"] += 1
             elif r.status_code == 409:
-                pass
+                devices_existed += 1
             else:
                 out["errors"].append(f"device {d['id']}: {r.status_code} {r.text[:120]}")
         if verbose:
-            print(f"  Devices: {out['devices']} created/updated")
+            parts = [f"{out['devices']} mới"]
+            if devices_existed:
+                parts.append(f"{devices_existed} đã tồn tại")
+            print(f"  Devices: {', '.join(parts)}")
 
         # 4. Events: read each CSV, ingest in batches.
         # Backend exposes only single POST /api/logs/ingest; for bulk we use
@@ -360,7 +367,20 @@ def main() -> int:
         print(f"Login:  {args.email}")
 
     if args.direct:
-        result = import_direct(verbose=True)
+        try:
+            result = import_direct(verbose=True)
+        except RuntimeError as exc:
+            if "psycopg-pool" in str(exc) or "psycopg" in str(exc).lower():
+                print(f"\nLỖI: {exc}", file=sys.stderr)
+                print("Host không có psycopg-pool. Cách khắc phục:", file=sys.stderr)
+                print("  1) Chạy API mode (khuyên dùng):", file=sys.stderr)
+                print("     python scripts/import_mock_data.py", file=sys.stderr)
+                print("  2) Hoặc import trong Docker:", file=sys.stderr)
+                print("     cat scripts/import_mock_data.py | docker compose exec -T app python3 - --direct", file=sys.stderr)
+                print("  3) Hoặc cài dependency trên host:", file=sys.stderr)
+                print("     pip install -r requirements.txt", file=sys.stderr)
+                return 1
+            raise
     else:
         result = import_via_api(
             server_url=args.server_url,
