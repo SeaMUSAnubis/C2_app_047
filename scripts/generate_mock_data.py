@@ -408,6 +408,29 @@ def main(argv: list[str] | None = None) -> int:
     email_rows: list[dict] = []
     device_rows: list[dict] = []
 
+    # Track logical duplicates: (user, pc, event_type, resource, date_string).
+    # The limited random pool (seed=42) with 5 URL choices and 6 file
+    # patterns per day can produce multiple events with the same
+    # (timestamp, user, device, event_type, resource) but different
+    # UUIDs.  Running import multiple times then creates N copies.
+    _seen: set[tuple[str, str, str, str, str]] = set()
+
+    def _dedup_key(row: dict, event_type: str) -> tuple[str, str, str, str, str]:
+        return (
+            row["user"],
+            row["pc"],
+            event_type,
+            row.get("url", row.get("filename", row.get("to", row.get("activity", "")))),
+            row["date"],
+        )
+
+    def _is_dup(row: dict, event_type: str) -> bool:
+        key = _dedup_key(row, event_type)
+        if key in _seen:
+            return True
+        _seen.add(key)
+        return False
+
     for day_offset in range(WORK_DAYS):
         day = START_DAY + timedelta(days=day_offset)
         for uid, *_ in USERS:
@@ -417,25 +440,37 @@ def main(argv: list[str] | None = None) -> int:
             for i in range(normal_logon_count):
                 ts = random_work_ts(day)
                 if i % 2 == 0:
-                    logon_rows.append(gen_logon_normal(uid, ts, pc))
+                    row = gen_logon_normal(uid, ts, pc)
+                    if not _is_dup(row, "logon"):
+                        logon_rows.append(row)
                 else:
-                    logon_rows.append(gen_logoff(uid, ts, pc))
+                    row = gen_logoff(uid, ts, pc)
+                    if not _is_dup(row, "logon"):
+                        logon_rows.append(row)
 
             # Normal http.
             for _ in range(NORMAL_COUNTS["http"]):
-                http_rows.append(gen_http_normal(uid, random_work_ts(day), pc))
+                row = gen_http_normal(uid, random_work_ts(day), pc)
+                if not _is_dup(row, "http"):
+                    http_rows.append(row)
 
             # Normal file.
             for _ in range(NORMAL_COUNTS["file"]):
-                file_rows.append(gen_file_normal(uid, random_work_ts(day), pc))
+                row = gen_file_normal(uid, random_work_ts(day), pc)
+                if not _is_dup(row, "file"):
+                    file_rows.append(row)
 
             # Normal email.
             for _ in range(NORMAL_COUNTS["email"]):
-                email_rows.append(gen_email_normal(uid, random_work_ts(day), pc))
+                row = gen_email_normal(uid, random_work_ts(day), pc)
+                if not _is_dup(row, "email"):
+                    email_rows.append(row)
 
             # Normal device (mostly disconnect).
             for _ in range(NORMAL_COUNTS["device"]):
-                device_rows.append(gen_device_normal(uid, random_work_ts(day), pc))
+                row = gen_device_normal(uid, random_work_ts(day), pc)
+                if not _is_dup(row, "device"):
+                    device_rows.append(row)
 
             # Anomalies: vary by user.
             profiles = ANOMALY_PROFILES.get(uid, [])
@@ -443,9 +478,11 @@ def main(argv: list[str] | None = None) -> int:
                 if random.random() < fraction:
                     ts = random_work_ts(day)
                     if et == "logon":
-                        logon_rows.append(gen(uid, ts, pc))
+                        row = gen(uid, ts, pc)
+                        if not _is_dup(row, "logon"):
+                            logon_rows.append(row)
                     elif et == "http":
-                        http_rows.append({
+                        row = {
                             **gen(uid, ts, pc),
                             "url": random.choice([
                                 "http://wikileaks.org/cables/2026/06.html",
@@ -453,9 +490,11 @@ def main(argv: list[str] | None = None) -> int:
                                 "https://mega.nz/file/secret#key",
                             ]),
                             "content": "blocked site visit",
-                        })
+                        }
+                        if not _is_dup(row, "http"):
+                            http_rows.append(row)
                     elif et == "file":
-                        file_rows.append({
+                        row = {
                             **gen(uid, ts, pc),
                             "filename": random.choice([
                                 "C-Drive/Projects/payroll_dump.exe",
@@ -464,9 +503,11 @@ def main(argv: list[str] | None = None) -> int:
                                 "Downloads/payload.exe",
                             ]),
                             "content": "executable on removable media",
-                        })
+                        }
+                        if not _is_dup(row, "file"):
+                            file_rows.append(row)
                     elif et == "email":
-                        email_rows.append({
+                        row = {
                             **gen(uid, ts, pc),
                             "to": random.choice([
                                 "personal@gmail.com",
@@ -476,9 +517,13 @@ def main(argv: list[str] | None = None) -> int:
                             "size": random.choice([8_000_000, 15_000_000, 25_000_000]),
                             "attachments": random.choice([2, 5, 12]),
                             "content": "sensitive business data leak",
-                        })
+                        }
+                        if not _is_dup(row, "email"):
+                            email_rows.append(row)
                     elif et == "device":
-                        device_rows.append(gen(uid, ts, pc))
+                        row = gen(uid, ts, pc)
+                        if not _is_dup(row, "device"):
+                            device_rows.append(row)
 
     # Write CSVs.
     def _write(name: str, rows: list[dict]) -> None:

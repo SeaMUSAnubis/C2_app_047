@@ -198,7 +198,11 @@ function matchesDatasetTimeRange(value: string | undefined, allValues: (string |
 }
 
 function getLogKey(log: EventLogItem) {
-  return `${log.timestamp}-${log.eventType}-${log.userId ?? log.user ?? ''}-${log.deviceId ?? log.device ?? ''}-${log.resource ?? ''}`;
+  // Use the unique event_logs primary key from the database.
+  // The composite key (timestamp + eventType + user + device + resource)
+  // can collide when multiple events share the same fields, causing
+  // React to render stale or duplicate rows.
+  return log.id ?? `${log.timestamp}-${log.eventType}-${log.userId ?? log.user ?? ''}-${log.deviceId ?? log.device ?? ''}-${log.resource ?? ''}`;
 }
 
 function parseTime(value: string | undefined) {
