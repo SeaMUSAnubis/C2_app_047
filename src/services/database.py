@@ -715,6 +715,25 @@ def list_frontend_alerts(limit: int = 100) -> list[dict[str, Any]]:
         return result
 
 
+def get_alert(alert_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM alerts WHERE id = %s", (alert_id,)).fetchone()
+        if not row:
+            return None
+        r = _row_to_dict(row) or {}
+        if r.get("risk_factors_json"):
+            r["risk_factors"] = json.loads(r.pop("risk_factors_json") or "[]")
+        return r
+
+
+def update_alert_explanation(alert_id: int, explanation_json: str) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE alerts SET explanation = %s, updated_at = %s WHERE id = %s",
+            (explanation_json, utc_now(), alert_id)
+        )
+
+
 _RAW_LOG_EVENT_TYPES = (
     "logon",
     "device",

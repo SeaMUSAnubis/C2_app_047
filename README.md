@@ -180,7 +180,53 @@ MISTRAL_API_KEY=
 MISTRAL_MODEL=mistral-small-latest
 ```
 
+## LLM Explanation Service
+
+Hệ thống tích hợp LLM Explanation Service để chuyển đổi output cảnh báo của Anomaly Detection Model thành ngôn ngữ tự nhiên, giúp SOC Analyst nhanh chóng hiểu được bản chất rủi ro.
+
+### Luồng hoạt động:
+1. Nhận thông tin cảnh báo từ hệ thống (Risk score, severity, anomalous features).
+2. Sanitization (Guardrails): Loại bỏ/che các thông tin nhạy cảm (secrets, password, token).
+3. System Prompting: Yêu cầu LLM phân tích dựa trên evidence, không bịa thông tin (Hallucination prevention) và không được tự ý sửa điểm số.
+4. Trả kết quả JSON: Bao gồm summary, các bằng chứng, limitations, và các recommended actions.
+5. Fallback Service: Nếu LLM lỗi, cấu hình sai hoặc không phản hồi, hệ thống sẽ tự động sinh giải thích từ rule-based logic có điểm confidence thấp hơn.
+
+### Cấu hình môi trường (Environment variables)
+Để kích hoạt dịch vụ, hãy thiết lập các biến sau trong file `.env`:
+```env
+LLM_PROVIDER=openai_compatible
+LLM_BASE_URL=https://openrouter.ai/api/v1/chat/completions
+LLM_API_KEY=your_api_key_here
+LLM_MODEL=openrouter/free
+LLM_TIMEOUT_SECONDS=20
+LLM_MAX_RETRIES=2
+LLM_TEMPERATURE=0.1
+LLM_ENABLED=true
+LLM_PROMPT_VERSION=ueba-explanation-v1
+```
+
+### Endpoints
+- `GET /api/alerts/{alert_id}/explanation`: Trả về explanation (từ DB cache hoặc tự động generate nếu chưa có/bị thay đổi).
+- `POST /api/alerts/{alert_id}/explanation/regenerate`: Generate lại explanation (chỉ dành cho Admin).
+
+### Cấu trúc mã nguồn (Code Structure)
+- `src/models/explanation.py`: Định nghĩa Pydantic Schemas (`AlertExplanationRequest`, `AlertExplanationResponse`) quy định chặt chẽ contract dữ liệu input/output.
+- `src/services/llm/`
+  - `client.py`: Khởi tạo `LLMClient` hỗ trợ chuẩn OpenAI-compatible (để gọi OpenRouter, Mistral...), bao gồm retry và timeout.
+  - `prompt_builder.py`: Tạo context an toàn, chứa các System Prompt và User Prompt.
+  - `guardrails.py`: Cơ chế bảo vệ trước và sau gọi LLM (Sanitize credentials, chống Hallucination, validate định dạng).
+  - `fallback_service.py`: Xử lý Rule-based Fallback khi LLM mất kết nối, trả lỗi hoặc không được kích hoạt.
+  - `explanation_service.py`: Orchestrator chính, nối pipeline `Sanitize -> Gọi LLM -> Validate -> Trả kết quả`. Có cơ chế tính toán `evidence_hash` để hỗ trợ Cache.
+- `tests/test_explanation_service.py`: Chứa Unit Tests cho các logic cốt lõi như Hallucination prevention, Prompt injection và Missing evidence.
+- `eval/`: Chứa bộ Dataset 8 test cases (`test_cases.json`) và script chấm điểm tự động (`explanation_evaluator.py`).
+
+### Chú ý an toàn (Security Guidelines)
+- **Không thay thế Anomaly Detection**: LLM chỉ đóng vai trò phân tích các sự kiện có sẵn. Điểm rủi ro (Risk score) được tính toán khách quan bởi model Machine Learning.
+- **Human Approval**: Mọi hành động nghiêm trọng như Block URL, Isolate thiết bị hay Vô hiệu hóa tài khoản do LLM đề xuất đều yêu cầu người điều hành phê duyệt (`requires_human_approval: true`).
+- **Testing**: Bạn có thể chạy tập kiểm thử LLM bằng lệnh: `.venv\Scripts\python.exe -m pytest tests/test_explanation_service.py` và chạy script đánh giá bộ dataset tại `python eval/explanation_evaluator.py`.
+
 ## Module ownership
+
 
 | Mảng | Thư mục | Deliverable |
 |---|---|---|
