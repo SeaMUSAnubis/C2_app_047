@@ -5,7 +5,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import type { Column } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
-import { SeverityBadge, StatusBadge } from '../components/security/SeverityBadge';
+import { StatusBadge } from '../components/security/SeverityBadge';
 import { getLogs } from '../lib/apiClient';
 import { formatDateTime, severityOptions, shortText } from '../lib/labels';
 import type { EventLogItem } from '../types/security';
@@ -116,7 +116,7 @@ export function LogsPage() {
     { key: 'timestamp', header: 'Thời gian', width: '16%', className: 'cell-nowrap', sortable: true, value: (l) => l.timestamp, render: (l) => formatDateTime(l.timestamp) },
     { key: 'user', header: 'Người dùng', width: '14%', className: 'col-secondary', render: (l) => shortText(l.user ?? l.userId, 'Không xác định') },
     { key: 'device', header: 'Thiết bị', width: '12%', className: 'cell-nowrap', render: (l) => <code>{shortText(l.device ?? l.deviceId, 'Không xác định')}</code> },
-    { key: 'eventType', header: 'Sự kiện', width: '17%', render: (l) => (<div className="event-cell">{l.severity && <SeverityBadge severity={l.severity} />} <span className="event-name">{shortText(l.eventType, 'Không xác định')}</span></div>) },
+    { key: 'eventType', header: 'Sự kiện', width: '17%', render: (l) => (<span className="event-name">{shortText(l.eventType, 'Không xác định')}</span>) },
     { key: 'sourceIp', header: 'IP nguồn', width: '13%', className: 'cell-nowrap col-secondary', render: (l) => shortText(l.sourceIp, 'Không xác định') },
     { key: 'resource', header: 'Tài nguyên', width: '14%', className: 'col-optional', render: (l) => <span title={l.resource}>{shortText(l.resource, 'Chưa có')}</span> },
     { key: 'result', header: 'Kết quả', width: '7%', className: 'col-optional', render: (l) => <StatusBadge value={l.result} /> },
