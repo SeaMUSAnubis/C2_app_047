@@ -7,10 +7,9 @@ Run from the repo root:
 Output: data/mock/*.csv  (and data/mock/LDAP/2010-01.csv)
 
 The dataset contains 8 users across 4 departments, 5 days of activity, with
-roughly 75% normal behavior and 25% deliberately anomalous events that the
-UEBA pipeline should flag (late-night logon, blocked URL, USB + .exe file
-copy, large external email with attachment). The 8 user IDs are deterministic
-and short so they fit the front-end search box easily.
+roughly 60-65% normal behavior and 35-40% deliberately anomalous events that
+the UEBA pipeline should flag.  ALL 8 users have distinct anomaly patterns so
+every filter and dashboard view shows interesting data.
 
 This is intentionally NOT a real CERT dump — values are synthesized and the
 "anomalies" are designed to be obvious to a human reviewer reading the CSVs.
@@ -51,18 +50,27 @@ DEVICES = [
     ("PC-6699", "WS-CAROL-03",   "macOS 14",   "10.20.10.17"),
     ("PC-5758", "WS-DAVID-04",   "Windows 11", "10.20.10.18"),
     ("PC-7811", "WS-EVA-05",     "Ubuntu 22",  "10.20.10.19"),
+    ("PC-9991", "WS-HENRY-06",   "Windows 10", "10.20.10.20"),
+    ("PC-8882", "WS-FRANK-07",   "macOS 13",   "10.20.10.21"),
+    ("PC-7773", "WS-GRACE-08",   "Windows 11", "10.20.10.22"),
 ]
 
-# Map user -> primary device (1 user may have multiple for realism).
+# Map user -> primary device
 USER_DEVICE = {
     "NGF0157": "PC-6056",
     "LRR0148": "PC-4275",
     "MOH0273": "PC-6699",
     "LAP0338": "PC-5758",
-    "BTR0002": "PC-6056",  # shares WS-ALICE-01 with Alice (hot-desking)
-    "ACM0001": "PC-4275",  # shares with Bob
-    "CNL0003": "PC-5758",  # shares with David
-    "ADM0099": "PC-7811",
+    "BTR0002": "PC-6056",  # shares with Alice (hot-desking)
+    "ACM0001": "PC-8882",
+    "CNL0003": "PC-7773",
+    "ADM0099": "PC-9991",
+}
+# Secondary devices some users also use (lateral movement)
+USER_SECONDARY = {
+    "ADM0099": "PC-7811",   # Henry uses Eva's machine sometimes
+    "LRR0148": "PC-7773",   # Bob uses Grace's machine
+    "MOH0273": "PC-4275",   # Carol uses Bob's machine
 }
 
 DEPARTMENTS = {u[0]: u[3] for u in USERS}
@@ -71,73 +79,119 @@ DEPARTMENTS = {u[0]: u[3] for u in USERS}
 START_DAY = datetime(2026, 6, 15, 0, 0, 0)
 WORK_DAYS = 5
 
-# Anomaly profile per user. Each entry is (event_type, fraction, generator).
-# Generator returns a dict matching the CERT row format for that type.
-ANOMALY_PROFILES: dict[str, list[tuple[str, float, callable]]] = {
-    # Bob (LRR0148) — late-night logon + blocked URL (wikileaks/pastebin)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Suspicious payload pools
+# ═══════════════════════════════════════════════════════════════════════════════
+
+MALICIOUS_URLS = [
+    "http://wikileaks.org/cables/2026/06.html",
+    "https://pastebin.com/raw/abc123",
+    "https://mega.nz/file/secret#key",
+    "http://darknet-market.onion/vendor/cc-dumps",
+    "https://c2-server.xyz/beacon.php",
+    "http://phishing-login.com/office365/auth",
+    "https://malware-cdn.net/dropper.exe",
+    "http://ransomware-panel.onion/admin",
+    "https://exfil-storage.ru/upload/archive",
+    "http://tor2web-proxy.link/access",
+    "https://cryptominer-pool.io/miner.js",
+    "http://0day-exploit.ru/shell",
+]
+
+EXFIL_EMAILS = [
+    "personal@gmail.com",
+    "competitor@external.io",
+    "drop@protonmail.com",
+    "hacker@riseup.net",
+    "anon@tutanota.com",
+    "whistleblower@protonmail.ch",
+    "darkbuyer@torbox.net",
+    "shadowbroker@mail2tor.com",
+]
+
+SUSPICIOUS_FILES = [
+    "C-Drive/Projects/payroll_dump.exe",
+    "Documents/confidential_Q3.zip",
+    "bin/keylogger.exe",
+    "Downloads/payload.exe",
+    "C-Drive/Windows/System32/mimikatz.exe",
+    "Temp/ransomware_encryptor.bin",
+    "AppData/Local/cobalt_strike.dll",
+    "Documents/financial_records_2026.xlsx.encrypted",
+    "Projects/source_code_backup.tar.gz",
+    "Downloads/cracked-software.exe",
+    "C-Drive/Tools/nmap_port_scanner.exe",
+    "Temp/wscript_macro.docm",
+]
+
+SUSPICIOUS_IPS = [
+    "185.220.101.34",
+    "45.33.32.156",
+    "198.51.100.23",
+    "203.0.113.99",
+    "91.121.87.44",
+    "5.255.88.99",
+    "176.9.45.1",
+    "138.197.44.2",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Anomaly profiles — EVERY user has at least 2 anomaly types
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Fraction per day: each user has ~35-40% chance of generating an anomaly
+# of each type they're assigned.  With 6 anomaly types, about half the
+# generated events will be anomalous.
+
+ANOMALY_PROFILES: dict[str, list[tuple[str, float, str]]] = {
+    # ── Alice (NGF0157) — data exfiltration + blocked sites ──
+    "NGF0157": [
+        ("email_exfil", 0.70, "Gửi email chứa file nhạy cảm ra bên ngoài"),
+        ("http_blocked", 0.60, "Truy cập trang web bị chặn / độc hại"),
+        ("file_exe", 0.50, "Truy cập file .exe đáng ngờ"),
+    ],
+    # ── Bob (LRR0148) — late-night + wikileaks heavy ──
     "LRR0148": [
-        ("logon", 0.10, lambda uid, ts, pc: {
-            "id": _id(),
-            "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-            "user": uid, "pc": pc, "activity": "Logon",
-        }),
-        ("http", 0.40, lambda uid, ts, pc: {
-            "id": _id(),
-            "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-            "user": uid, "pc": pc,
-            "url": random.choice([
-                "http://wikileaks.org/cables/2026/06.html",
-                "https://pastebin.com/raw/abc123",
-                "https://mega.nz/file/secret#key",
-            ]),
-            "content": "sensitive data exfil target",
-        }),
+        ("logon_after_hours", 0.80, "Đăng nhập ngoài giờ làm việc (0h-5h sáng)"),
+        ("http_blocked", 0.70, "Truy cập Wikileaks / Pastebin"),
+        ("device_usb", 0.40, "Cắm thiết bị USB lạ"),
     ],
-    # Carol (MOH0273) — USB device with .exe + copy to removable
+    # ── Carol (MOH0273) — USB + .exe heavy ──
     "MOH0273": [
-        ("device", 0.30, lambda uid, ts, pc: {
-            "id": _id(),
-            "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-            "user": uid, "pc": pc, "activity": "Connect",
-        }),
-        ("file", 0.50, lambda uid, ts, pc: {
-            "id": _id(),
-            "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-            "user": uid, "pc": pc,
-            "filename": random.choice([
-                "C-Drive/Projects/payroll_dump.exe",
-                "Documents/confidential_Q3.zip",
-                "bin/keylogger.exe",
-            ]),
-            "content": "executable on removable media",
-        }),
+        ("device_usb", 0.80, "Kết nối thiết bị USB không rõ nguồn gốc"),
+        ("file_exe", 0.70, "Chạy file thực thi từ USB"),
+        ("network_suspicious", 0.50, "Kết nối đến IP đáng ngờ"),
     ],
-    # David (LAP0338) — large external email with attachment
+    # ── David (LAP0338) — email leak + after-hours ──
     "LAP0338": [
-        ("email", 0.30, lambda uid, ts, pc: {
-            "id": _id(),
-            "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-            "user": uid, "pc": pc,
-            "to": random.choice([
-                "personal@gmail.com",
-                "competitor@external.io",
-                "drop@protonmail.com",
-            ]),
-            "cc": "",
-            "bcc": "",
-            "from": "david.park@demo.corp",
-            "size": random.choice([8500000, 15000000, 25000000]),
-            "attachments": random.choice([2, 5, 12]),
-            "content": "sensitive business data leak",
-        }),
+        ("email_exfil", 0.70, "Gửi email dung lượng lớn ra ngoài"),
+        ("logon_after_hours", 0.60, "Đăng nhập lúc nửa đêm"),
+        ("file_mass_download", 0.50, "Tải hàng loạt file nội bộ"),
     ],
-    # Frank (ACM0001) — high-risk after-hours logon
+    # ── Eva (BTR0002) — lateral movement + HR data access ──
+    "BTR0002": [
+        ("logon_other_device", 0.60, "Đăng nhập từ thiết bị của người khác"),
+        ("file_sensitive", 0.70, "Truy cập file nhân sự nhạy cảm"),
+        ("email_exfil", 0.50, "Gửi dữ liệu HR ra ngoài"),
+    ],
+    # ── Frank (ACM0001) — sales data theft + after-hours ──
     "ACM0001": [
-        ("logon", 0.20, lambda uid, ts, pc: {
-            "id": _id(),
-            "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-            "user": uid, "pc": pc, "activity": "Logon",
-        }),
+        ("logon_after_hours", 0.70, "Đăng nhập cuối tuần / ban đêm"),
+        ("file_mass_download", 0.60, "Tải toàn bộ danh sách khách hàng"),
+        ("http_blocked", 0.50, "Truy cập darknet / proxy ẩn danh"),
+    ],
+    # ── Grace (CNL0003) — privilege escalation + compliance bypass ──
+    "CNL0003": [
+        ("file_sensitive", 0.70, "Truy cập file pháp lý không được phép"),
+        ("logon_other_device", 0.55, "Đăng nhập từ máy khác"),
+        ("network_suspicious", 0.45, "Kết nối ra IP nước ngoài lạ"),
+    ],
+    # ── Henry (ADM0099) — insider threat: IT Ops abuse ──
+    "ADM0099": [
+        ("logon_other_device", 0.65, "Đăng nhập vào máy người khác (quyền IT)"),
+        ("device_usb", 0.60, "Cắm USB lạ vào server"),
+        ("file_exe", 0.55, "Chạy tool quét mạng / crack mật khẩu"),
+        ("network_suspicious", 0.50, "Kết nối ra C2 server"),
     ],
 }
 
@@ -152,10 +206,21 @@ def _ensure_dirs() -> None:
     LDAP_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# LDAP (single snapshot file)
-# ---------------------------------------------------------------------------
+def _after_hours_ts(day: datetime, hour_range: tuple[int, int] = (0, 5)) -> datetime:
+    """Generate a timestamp in the dead-of-night range."""
+    h = random.randint(*hour_range)
+    m = random.randint(0, 59)
+    s = random.randint(0, 59)
+    return day.replace(hour=h, minute=m, second=s)
 
+
+def _fmt_ts(ts: datetime) -> str:
+    return ts.strftime("%m/%d/%Y %H:%M:%S")
+
+
+# ---------------------------------------------------------------------------
+# LDAP
+# ---------------------------------------------------------------------------
 
 def write_ldap() -> None:
     out = LDAP_DIR / "2010-01.csv"
@@ -175,177 +240,172 @@ def write_ldap() -> None:
 # Psychometric
 # ---------------------------------------------------------------------------
 
-
 def write_psychometric() -> None:
     out = OUTPUT_DIR / "psychometric.csv"
     with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["employee_name", "user_id", "O", "C", "E", "A", "N"])
         for uid, name, *_ in USERS:
-            # Big-Five scores roughly in 30-70 range, varied per user.
             w.writerow([name, uid,
-                        random.randint(35, 70),  # O openness
-                        random.randint(35, 70),  # C conscientiousness
-                        random.randint(30, 70),  # E extraversion
-                        random.randint(35, 70),  # A agreeableness
-                        random.randint(30, 65)])  # N neuroticism
+                        random.randint(35, 70),
+                        random.randint(35, 70),
+                        random.randint(30, 70),
+                        random.randint(35, 70),
+                        random.randint(30, 65)])
     print(f"  Wrote {out} ({len(USERS)} profiles)")
 
 
 # ---------------------------------------------------------------------------
-# Event generators
+# Normal event generators
 # ---------------------------------------------------------------------------
 
-
 def gen_logon_normal(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc, "activity": "Logon",
-    }
-
-
-def gen_logon_after_hours(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc, "activity": "Logon",
-    }
-
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc, "activity": "Logon"}
 
 def gen_logoff(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc, "activity": "Logoff",
-    }
-
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc, "activity": "Logoff"}
 
 def gen_http_normal(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc,
-        "url": random.choice([
-            "https://news.ycombinator.com/",
-            "https://stackoverflow.com/questions/12345",
-            "https://docs.python.org/3/library/csv.html",
-            "https://github.com/company/internal-tool",
-            "https://www.bing.com/search?q=hello",
-        ]),
-        "content": "normal browsing activity",
-    }
-
-
-def gen_http_blocked(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc,
-        "url": random.choice([
-            "http://wikileaks.org/cables/2026/06.html",
-            "https://pastebin.com/raw/xyz789",
-            "https://mega.nz/file/secret#key",
-        ]),
-        "content": "blocked site visit",
-    }
-
+    urls = [
+        "https://news.ycombinator.com/",
+        "https://stackoverflow.com/questions/12345",
+        "https://docs.python.org/3/library/csv.html",
+        "https://github.com/company/internal-tool",
+        "https://www.bing.com/search?q=hello",
+        "https://confluence.internal.corp/pages/hr-policy",
+        "https://jira.internal.corp/browse/DEV-421",
+        "https://slack.com/team/engineering",
+        "https://mail.google.com/",
+        "https://calendar.google.com/",
+        "https://teams.microsoft.com/",
+        "https://dashboard.internal.corp/metrics",
+    ]
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "url": random.choice(urls), "content": "normal browsing activity"}
 
 def gen_file_normal(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc,
-        "filename": random.choice([
-            f"Documents/report_{ts.day}.docx",
-            "Projects/spec.md",
-            f"Downloads/photo_{ts.day}.jpg",
-            f"Notes/notes_{ts.day}.txt",
-        ]),
-        "content": "normal file access",
-    }
-
-
-def gen_file_exe(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc,
-        "filename": random.choice([
-            "C-Drive/Projects/payroll_dump.exe",
-            "Documents/confidential_Q3.zip",
-            "bin/keylogger.exe",
-            "Downloads/payload.exe",
-        ]),
-        "content": "executable on endpoint",
-    }
-
+    files = [
+        f"Documents/report_{ts.day}.docx",
+        "Projects/spec.md",
+        f"Downloads/photo_{ts.day}.jpg",
+        f"Notes/notes_{ts.day}.txt",
+        "Documents/meeting_minutes.pdf",
+        "Projects/sprint_backlog.xlsx",
+        "Downloads/invoice_template.docx",
+        "Documents/presentation_q3.pptx",
+    ]
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "filename": random.choice(files), "content": "normal file access"}
 
 def gen_email_normal(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc,
-        "to": random.choice([
-            "colleague@demo.corp", "manager@demo.corp",
-            "team@demo.corp", "support@demo.corp",
-        ]),
-        "cc": "", "bcc": "", "from": f"{uid}@demo.corp",
-        "size": random.randint(2000, 50000),
-        "attachments": random.randint(0, 1),
-        "content": "normal email",
-    }
-
-
-def gen_email_external(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc,
-        "to": random.choice([
-            "personal@gmail.com",
-            "competitor@external.io",
-            "drop@protonmail.com",
-        ]),
-        "cc": "", "bcc": "", "from": f"{uid}@demo.corp",
-        "size": random.choice([8_000_000, 15_000_000, 25_000_000]),
-        "attachments": random.choice([2, 5, 12]),
-        "content": "sensitive business data leak",
-    }
-
+    to = random.choice(["colleague@demo.corp", "manager@demo.corp",
+                         "team@demo.corp", "support@demo.corp"])
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "to": to, "cc": "", "bcc": "", "from": f"{uid}@demo.corp",
+            "size": random.randint(2000, 50000),
+            "attachments": random.randint(0, 1),
+            "content": "normal email"}
 
 def gen_device_normal(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc,
-        "activity": random.choice(["Connect", "Disconnect"]),
-    }
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "activity": random.choice(["Connect", "Disconnect"])}
 
 
-def gen_device_suspicious(uid: str, ts: datetime, pc: str) -> dict:
-    return {
-        "id": _id(),
-        "date": ts.strftime("%m/%d/%Y %H:%M:%S"),
-        "user": uid, "pc": pc, "activity": "Connect",
-    }
+# ---------------------------------------------------------------------------
+# Anomaly event generators — one function per anomaly type
+# ---------------------------------------------------------------------------
 
+def gen_logon_after_hours_anomaly(uid: str, day: datetime, pc: str) -> dict:
+    ts = _after_hours_ts(day, (0, 5))
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc, "activity": "Logon"}
+
+def gen_http_blocked_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "url": random.choice(MALICIOUS_URLS),
+            "content": "blocked / malicious site visit"}
+
+def gen_email_exfil_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "to": random.choice(EXFIL_EMAILS),
+            "cc": "", "bcc": "",
+            "from": f"{uid}@demo.corp",
+            "size": random.choice([8_500_000, 15_000_000, 25_000_000, 40_000_000, 75_000_000]),
+            "attachments": random.choice([2, 5, 8, 12, 20]),
+            "content": "sensitive business data exfiltration"}
+
+def gen_file_exe_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "filename": random.choice(SUSPICIOUS_FILES),
+            "content": "suspicious executable / script access"}
+
+def gen_device_usb_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc, "activity": "Connect"}
+
+def gen_network_suspicious_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    ip = random.choice(SUSPICIOUS_IPS)
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "url": f"https://{ip}:8443/admin",
+            "content": f"connection to suspicious IP {ip}"}
+
+def gen_logon_other_device_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    """Logon from a device that isn't the user's primary."""
+    # Pick a device that belongs to someone else
+    other_pc = random.choice([d[0] for d in DEVICES if d[0] != USER_DEVICE.get(uid)])
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": other_pc, "activity": "Logon"}
+
+def gen_file_sensitive_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    sensitive = [
+        "HR/salaries_2026.xlsx",
+        "Finance/budget_confidential.pdf",
+        "Legal/merger_documents.docx",
+        "HR/employee_reviews_2026.pdf",
+        "Finance/tax_evasion_plan.xlsx",
+        "Legal/lawsuit_settlement.docx",
+        "HR/disciplinary_records.pdf",
+        "Legal/patent_filing_confidential.docx",
+    ]
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "filename": random.choice(sensitive),
+            "content": "access to sensitive/restricted file"}
+
+def gen_file_mass_download_anomaly(uid: str, ts: datetime, pc: str) -> dict:
+    mass_files = [
+        "Downloads/customer_list_full.csv",
+        "Downloads/source_code_dump.tar.gz",
+        "Downloads/all_employee_data.xlsx",
+        "Downloads/database_backup.sql.gz",
+        "Downloads/project_archive_complete.zip",
+    ]
+    return {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": pc,
+            "filename": random.choice(mass_files),
+            "content": "mass data download / archive access"}
+
+# Map anomaly codes → (generator_func, event_type)
+ANOMALY_GENERATORS: dict[str, tuple[callable, str]] = {
+    "logon_after_hours": (gen_logon_after_hours_anomaly, "logon"),
+    "http_blocked": (gen_http_blocked_anomaly, "http"),
+    "email_exfil": (gen_email_exfil_anomaly, "email"),
+    "file_exe": (gen_file_exe_anomaly, "file"),
+    "device_usb": (gen_device_usb_anomaly, "device"),
+    "network_suspicious": (gen_network_suspicious_anomaly, "http"),
+    "logon_other_device": (gen_logon_other_device_anomaly, "logon"),
+    "file_sensitive": (gen_file_sensitive_anomaly, "file"),
+    "file_mass_download": (gen_file_mass_download_anomaly, "file"),
+}
 
 # Per-day, per-user target counts of normal activity.
 NORMAL_COUNTS = {
-    "logon": 4,    # 2 logon + 2 logoff per day
-    "logoff": 0,   # merged into logon (alternating)
-    "http": 12,
-    "file": 6,
-    "email": 4,
-    "device": 2,
+    "logon": 3,    # reduced so anomalies stand out proportionally
+    "http": 6,
+    "file": 3,
+    "email": 2,
+    "device": 1,
 }
 
 
 # ---------------------------------------------------------------------------
-# Schedule
+# Schedule helpers
 # ---------------------------------------------------------------------------
-
 
 def work_minutes_for_hour(h: int) -> int:
     """Working hours: 8-12 morning, 13-17 afternoon. Density peaks 9-11 / 14-16."""
@@ -353,23 +413,16 @@ def work_minutes_for_hour(h: int) -> int:
         return 8
     if h in (8, 12, 13, 17):
         return 4
-    return 0  # off-hours (rare random ticks possible)
+    if h in (18, 19):
+        return 2  # some overtime
+    return 0
 
-
-def should_emit_after_hours() -> bool:
-    return random.random() < 0.05  # 5% of events land after hours
-
-
-def random_work_ts(day: datetime) -> datetime:
-    """Pick a random timestamp in a work hour, or rarely after hours."""
-    if should_emit_after_hours():
+def random_work_ts(day: datetime, after_hours_pct: float = 0.05) -> datetime:
+    """Pick a random timestamp, mostly during work hours."""
+    if random.random() < after_hours_pct:
         h = random.choice(list(range(0, 24)))
     else:
-        # Weighted hour selection.
-        hours_pool = []
-        for h in range(24):
-            for _ in range(work_minutes_for_hour(h)):
-                hours_pool.append(h)
+        hours_pool = [h for h in range(24) for _ in range(work_minutes_for_hour(h))]
         if not hours_pool:
             h = 9
         else:
@@ -383,7 +436,6 @@ def random_work_ts(day: datetime) -> datetime:
 # Main
 # ---------------------------------------------------------------------------
 
-
 def main(argv: list[str] | None = None) -> int:
     global OUTPUT_DIR, LDAP_DIR
     ap = argparse.ArgumentParser(
@@ -391,12 +443,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--seed", type=int, default=42,
                     help="Random seed for reproducible datasets (default: 42)")
+    ap.add_argument("--days", type=int, default=WORK_DAYS,
+                    help=f"Number of work days to simulate (default: {WORK_DAYS})")
     ap.add_argument("--out", type=Path, default=OUTPUT_DIR,
                     help="Output directory (default: data/mock)")
     args = ap.parse_args(argv)
 
     random.seed(args.seed)
-    # Allow overriding the output dir for tests.
     OUTPUT_DIR = args.out
     LDAP_DIR = OUTPUT_DIR / "LDAP"
     _ensure_dirs()
@@ -408,11 +461,7 @@ def main(argv: list[str] | None = None) -> int:
     email_rows: list[dict] = []
     device_rows: list[dict] = []
 
-    # Track logical duplicates: (user, pc, event_type, resource, date_string).
-    # The limited random pool (seed=42) with 5 URL choices and 6 file
-    # patterns per day can produce multiple events with the same
-    # (timestamp, user, device, event_type, resource) but different
-    # UUIDs.  Running import multiple times then creates N copies.
+    # Dedup tracker.
     _seen: set[tuple[str, str, str, str, str]] = set()
 
     def _dedup_key(row: dict, event_type: str) -> tuple[str, str, str, str, str]:
@@ -431,99 +480,87 @@ def main(argv: list[str] | None = None) -> int:
         _seen.add(key)
         return False
 
-    for day_offset in range(WORK_DAYS):
+    anomaly_stats: dict[str, int] = {}
+    normal_stats: dict[str, int] = {}
+
+    for day_offset in range(args.days):
         day = START_DAY + timedelta(days=day_offset)
         for uid, *_ in USERS:
             pc = USER_DEVICE[uid]
-            # Normal: logon + logoff alternating.
-            normal_logon_count = NORMAL_COUNTS["logon"]
-            for i in range(normal_logon_count):
+
+            # ── ANOMALIES FIRST (win dedup race) ──
+            profiles = ANOMALY_PROFILES.get(uid, [])
+            for anomaly_code, fraction, desc in profiles:
+                # fire 1-3 anomaly events per type per day
+                count = 1
+                if random.random() < fraction:
+                    count = 2
+                if random.random() < fraction * 0.6:
+                    count = 3
+                for _ in range(count):
+                    gen_func, event_type = ANOMALY_GENERATORS[anomaly_code]
+                    ts = random_work_ts(day, after_hours_pct=0.40)
+                    row = gen_func(uid, ts, pc)
+                    if not _is_dup(row, event_type):
+                        if event_type == "logon":
+                            logon_rows.append(row)
+                        elif event_type == "http":
+                            http_rows.append(row)
+                        elif event_type == "file":
+                            file_rows.append(row)
+                        elif event_type == "email":
+                            email_rows.append(row)
+                        elif event_type == "device":
+                            device_rows.append(row)
+                        anomaly_stats[desc] = anomaly_stats.get(desc, 0) + 1
+
+            # Secondary-device lateral movement
+            sec_pc = USER_SECONDARY.get(uid)
+            if sec_pc and random.random() < 0.50:
+                ts = random_work_ts(day, after_hours_pct=0.40)
+                row = {"id": _id(), "date": _fmt_ts(ts), "user": uid, "pc": sec_pc, "activity": "Logon"}
+                if not _is_dup(row, "logon"):
+                    logon_rows.append(row)
+                    anomaly_stats["Đăng nhập từ thiết bị phụ (lateral movement)"] = \
+                        anomaly_stats.get("Đăng nhập từ thiết bị phụ (lateral movement)", 0) + 1
+
+            # ── Normal events (after anomalies — get dedup'd if collision) ──
+            for i in range(NORMAL_COUNTS["logon"]):
                 ts = random_work_ts(day)
                 if i % 2 == 0:
                     row = gen_logon_normal(uid, ts, pc)
                     if not _is_dup(row, "logon"):
                         logon_rows.append(row)
+                        normal_stats["logon"] = normal_stats.get("logon", 0) + 1
                 else:
                     row = gen_logoff(uid, ts, pc)
                     if not _is_dup(row, "logon"):
                         logon_rows.append(row)
+                        normal_stats["logoff"] = normal_stats.get("logoff", 0) + 1
 
-            # Normal http.
             for _ in range(NORMAL_COUNTS["http"]):
                 row = gen_http_normal(uid, random_work_ts(day), pc)
                 if not _is_dup(row, "http"):
                     http_rows.append(row)
+                    normal_stats["http"] = normal_stats.get("http", 0) + 1
 
-            # Normal file.
             for _ in range(NORMAL_COUNTS["file"]):
                 row = gen_file_normal(uid, random_work_ts(day), pc)
                 if not _is_dup(row, "file"):
                     file_rows.append(row)
+                    normal_stats["file"] = normal_stats.get("file", 0) + 1
 
-            # Normal email.
             for _ in range(NORMAL_COUNTS["email"]):
                 row = gen_email_normal(uid, random_work_ts(day), pc)
                 if not _is_dup(row, "email"):
                     email_rows.append(row)
+                    normal_stats["email"] = normal_stats.get("email", 0) + 1
 
-            # Normal device (mostly disconnect).
             for _ in range(NORMAL_COUNTS["device"]):
                 row = gen_device_normal(uid, random_work_ts(day), pc)
                 if not _is_dup(row, "device"):
                     device_rows.append(row)
-
-            # Anomalies: vary by user.
-            profiles = ANOMALY_PROFILES.get(uid, [])
-            for et, fraction, gen in profiles:
-                if random.random() < fraction:
-                    ts = random_work_ts(day)
-                    if et == "logon":
-                        row = gen(uid, ts, pc)
-                        if not _is_dup(row, "logon"):
-                            logon_rows.append(row)
-                    elif et == "http":
-                        row = {
-                            **gen(uid, ts, pc),
-                            "url": random.choice([
-                                "http://wikileaks.org/cables/2026/06.html",
-                                "https://pastebin.com/raw/xyz789",
-                                "https://mega.nz/file/secret#key",
-                            ]),
-                            "content": "blocked site visit",
-                        }
-                        if not _is_dup(row, "http"):
-                            http_rows.append(row)
-                    elif et == "file":
-                        row = {
-                            **gen(uid, ts, pc),
-                            "filename": random.choice([
-                                "C-Drive/Projects/payroll_dump.exe",
-                                "Documents/confidential_Q3.zip",
-                                "bin/keylogger.exe",
-                                "Downloads/payload.exe",
-                            ]),
-                            "content": "executable on removable media",
-                        }
-                        if not _is_dup(row, "file"):
-                            file_rows.append(row)
-                    elif et == "email":
-                        row = {
-                            **gen(uid, ts, pc),
-                            "to": random.choice([
-                                "personal@gmail.com",
-                                "competitor@external.io",
-                                "drop@protonmail.com",
-                            ]),
-                            "size": random.choice([8_000_000, 15_000_000, 25_000_000]),
-                            "attachments": random.choice([2, 5, 12]),
-                            "content": "sensitive business data leak",
-                        }
-                        if not _is_dup(row, "email"):
-                            email_rows.append(row)
-                    elif et == "device":
-                        row = gen(uid, ts, pc)
-                        if not _is_dup(row, "device"):
-                            device_rows.append(row)
+                    normal_stats["device"] = normal_stats.get("device", 0) + 1
 
     # Write CSVs.
     def _write(name: str, rows: list[dict]) -> None:
@@ -545,8 +582,16 @@ def main(argv: list[str] | None = None) -> int:
     write_ldap()
     write_psychometric()
 
-    print(f"\nDone. 5 days, {len(USERS)} users. Total events: "
-          f"{len(logon_rows) + len(http_rows) + len(file_rows) + len(email_rows) + len(device_rows)}")
+    total = len(logon_rows) + len(http_rows) + len(file_rows) + len(email_rows) + len(device_rows)
+    total_anomalies = sum(anomaly_stats.values())
+    print(f"\nDone. {args.days} days, {len(USERS)} users.")
+    print(f"Total events:    {total}")
+    print(f"Normal events:   {total - total_anomalies}")
+    print(f"Anomalous events: {total_anomalies} ({total_anomalies * 100 // max(total, 1)}%)")
+
+    print("\nAnomaly breakdown:")
+    for desc, count in sorted(anomaly_stats.items(), key=lambda x: -x[1]):
+        print(f"  {count:>4}  {desc}")
 
 
 if __name__ == "__main__":
