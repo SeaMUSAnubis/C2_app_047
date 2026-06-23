@@ -1,0 +1,9 @@
+employee_name,user_id,email,role,business_unit,functional_unit,department,team,supervisor
+Alice Carter,NGF0157,alice.carter@demo.corp,Accountant,1,Finance Team,Finance,Tax,Dean Hines
+Bob Reyes,LRR0148,bob.reyes@demo.corp,Engineer,1,Engineering Team,Engineering,Backend,Maya Lin
+Carol Nguyen,MOH0273,carol.nguyen@demo.corp,Engineer,1,Engineering Team,Engineering,Frontend,Maya Lin
+David Park,LAP0338,david.park@demo.corp,Analyst,1,Operations Team,Operations,BI,Hana Suzuki
+Eva Thompson,BTR0002,eva.thompson@demo.corp,Specialist,1,HR Team,HR,Recruiting,Hana Suzuki
+Frank Mendez,ACM0001,frank.mendez@demo.corp,Manager,1,Sales Team,Sales,EMEA,VP Sales
+Grace Liu,CNL0003,grace.liu@demo.corp,Auditor,1,Legal Team,Legal,Compliance,General Counsel
+Henry Adams,ADM0099,henry.adams@demo.corp,Operator,1,Operations Team,Operations,IT Ops,Hana Suzuki
