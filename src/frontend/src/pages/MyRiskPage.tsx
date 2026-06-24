@@ -6,6 +6,7 @@ import type { Column } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
 import { SeverityBadge } from '../components/security/SeverityBadge';
 import { StatCard } from '../components/security/StatCard';
+import { StateMessage } from '../components/security/StateMessage';
 import { AlertDetailModal } from '../features/alerts/AlertDetailModal';
 import { eventTypeLabel, statusLabel } from '../lib/labels';
 import { getEmployeeOverview } from '../lib/apiClient';
@@ -64,9 +65,9 @@ export default function MyRiskPage() {
     return () => { ignore = true; };
   }, []);
 
-  if (loading) return <div className="panel-card">Đang tải hồ sơ rủi ro cá nhân...</div>;
-  if (error) return <div className="panel-card error-state"><h3>Lỗi tải dữ liệu</h3><p>{error}</p></div>;
-  if (!data) return <div className="panel-card">Tài khoản chưa được liên kết với người dùng nào. Hãy liên hệ quản trị viên.</div>;
+  if (loading) return <div className="panel-card"><StateMessage variant="loading" title="Đang tải hồ sơ rủi ro cá nhân..." /></div>;
+  if (error) return <div className="panel-card"><StateMessage variant="error" title="Lỗi tải dữ liệu">{error}</StateMessage></div>;
+  if (!data) return <div className="panel-card"><StateMessage variant="empty">Tài khoản chưa được liên kết với người dùng nào. Hãy liên hệ quản trị viên.</StateMessage></div>;
 
   const user = data.user;
 

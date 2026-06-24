@@ -3,6 +3,7 @@ import { Search, UserRoundCheck } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
+import { StateMessage } from '../components/security/StateMessage';
 import { StatusBadge } from '../components/security/SeverityBadge';
 import { getUsers } from '../lib/apiClient';
 import { formatDateTime, riskLevelOptions, shortText } from '../lib/labels';
@@ -105,10 +106,10 @@ export function UsersPage() {
 
       <section className="entity-layout">
         <div className="panel-card">
-          {loading && <p>Đang tải người dùng...</p>}
-          {error && <p className="error-message">{error}</p>}
-          {!loading && !error && users.length === 0 && <p>Chưa có người dùng. Hãy nạp dữ liệu vào cơ sở dữ liệu.</p>}
-          {!loading && !error && users.length > 0 && filteredUsers.length === 0 && <p>Không có người dùng khớp bộ lọc.</p>}
+          {loading && <StateMessage variant="loading" title="Đang tải người dùng..." />}
+          {error && <StateMessage variant="error" title="Lỗi tải dữ liệu">{error}</StateMessage>}
+          {!loading && !error && users.length === 0 && <StateMessage variant="empty">Chưa có người dùng. Hãy nạp dữ liệu vào cơ sở dữ liệu.</StateMessage>}
+          {!loading && !error && users.length > 0 && filteredUsers.length === 0 && <StateMessage variant="empty">Không có người dùng khớp bộ lọc.</StateMessage>}
           <DataTable<UserEntity>
             columns={[
               { key: 'name', header: 'Người dùng', width: '24%', render: (u) => (<div className="cell-main" title={`${u.name} ${u.account}`}><strong>{u.name}</strong><span className="muted-line">{u.account}</span></div>) },

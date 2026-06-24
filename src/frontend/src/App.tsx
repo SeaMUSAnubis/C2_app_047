@@ -4,6 +4,7 @@ import { AuthProvider } from './store/authStore';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import RoleGuard from './components/layout/RoleGuard';
+import { ErrorBoundary } from './components/layout/ErrorBoundary';
 
 import LoginPage from './pages/LoginPage';
 
@@ -26,9 +27,10 @@ function PageFallback() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <Routes>
           <Route path="/login" element={<LoginPage />} />
 
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -53,9 +55,10 @@ function App() {
             </Route>
           </Route>
 
-        </Routes>
-      </Router>
-    </AuthProvider>
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

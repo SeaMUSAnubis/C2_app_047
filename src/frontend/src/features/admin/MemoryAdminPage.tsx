@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Activity, Brain, Cpu, Database } from 'lucide-react';
 import {
   forgetMemory,
   getLLMStats,
@@ -71,8 +72,8 @@ export function MemoryAdminPage() {
       <div className="page-title-row">
         <div>
           <span className="eyebrow">Quản trị</span>
-          <h1>LLM Memory & Stats</h1>
-          <p>Quản lý long-term memory và theo dõi sức khỏe LLM + connection pool.</p>
+          <h1>Bộ nhớ LLM &amp; Thống kê</h1>
+          <p>Quản lý bộ nhớ dài hạn và theo dõi tình trạng LLM + connection pool.</p>
         </div>
       </div>
 
@@ -80,41 +81,41 @@ export function MemoryAdminPage() {
 
       <div className="stat-grid">
         <div className="stat-card">
-          <div className="stat-icon">🧠</div>
-          <p>Tổng memory</p>
+          <div className="stat-icon"><Brain size={22} /></div>
+          <p>Tổng bộ nhớ</p>
           <strong>{memories.length}</strong>
-          <span>trong page hiện tại</span>
+          <span>trong trang hiện tại</span>
         </div>
         <div className="stat-card tone-green">
-          <div className="stat-icon">📞</div>
-          <p>LLM calls</p>
+          <div className="stat-icon"><Activity size={22} /></div>
+          <p>Lượt gọi LLM</p>
           <strong>{llmStats?.total_calls ?? '—'}</strong>
           <span>
-            fallback: {llmStats?.total_fallback ?? 0} · avg {llmStats?.avg_latency_ms ?? 0}ms
+            dự phòng: {llmStats?.total_fallback ?? 0} · TB {llmStats?.avg_latency_ms ?? 0}ms
           </span>
         </div>
         <div className="stat-card tone-violet">
-          <div className="stat-icon">🧪</div>
+          <div className="stat-icon"><Cpu size={22} /></div>
           <p>Tokens</p>
           <strong>
             {((llmStats?.total_input_tokens ?? 0) + (llmStats?.total_output_tokens ?? 0)).toLocaleString()}
           </strong>
           <span>
-            in {llmStats?.total_input_tokens ?? 0} / out {llmStats?.total_output_tokens ?? 0}
+            vào {llmStats?.total_input_tokens ?? 0} / ra {llmStats?.total_output_tokens ?? 0}
           </span>
         </div>
         <div className="stat-card tone-orange">
-          <div className="stat-icon">🔌</div>
+          <div className="stat-icon"><Database size={22} /></div>
           <p>DB Pool</p>
           <strong>{poolStats?.pool_in_use ?? 0}/{poolStats?.max_size ?? '—'}</strong>
-          <span>waiting: {poolStats?.requests_waiting ?? 0}</span>
+          <span>đang chờ: {poolStats?.requests_waiting ?? 0}</span>
         </div>
       </div>
 
       <div className="panel-card">
         <div className="filter-row">
           <div className="filter-pills">
-            <span className="filter-pill" style={{ background: 'transparent' }}>Scope:</span>
+            <span className="filter-pill filter-pill-label">Phạm vi:</span>
             <button
               type="button"
               className={`filter-pill ${scope === '' ? 'active' : ''}`}
@@ -134,7 +135,7 @@ export function MemoryAdminPage() {
             ))}
           </div>
           <div className="filter-pills">
-            <span className="filter-pill" style={{ background: 'transparent' }}>Kind:</span>
+            <span className="filter-pill filter-pill-label">Loại:</span>
             <button
               type="button"
               className={`filter-pill ${kind === '' ? 'active' : ''}`}
@@ -153,11 +154,11 @@ export function MemoryAdminPage() {
               </button>
             ))}
           </div>
-          <div className="filter-row" style={{ gap: 8 }}>
+          <div className="filter-row">
             <input
               className="search-input"
               type="text"
-              placeholder="Filter theo tag…"
+              placeholder="Lọc theo thẻ..."
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void reload()}
@@ -196,8 +197,8 @@ export function MemoryAdminPage() {
                       {m.scope_id && <small className="text-muted-small"> · {m.scope_id}</small>}
                     </td>
                     <td><span className="status-pill">{m.kind}</span></td>
-                    <td style={{ maxWidth: 420 }}>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content}</div>
+                    <td className="cell-content">
+                      <div className="text-ellipsis">{m.content}</div>
                     </td>
                     <td>
                       <div className="chip-row">

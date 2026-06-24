@@ -3,6 +3,7 @@ import { HardDrive, Search } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
+import { StateMessage } from '../components/security/StateMessage';
 import { StatusBadge } from '../components/security/SeverityBadge';
 import { getDevices } from '../lib/apiClient';
 import { formatDateTime, shortText } from '../lib/labels';
@@ -103,10 +104,10 @@ export function DevicesPage() {
 
       <section className="entity-layout">
         <div className="panel-card">
-          {loading && <p>Đang tải thiết bị...</p>}
-          {error && <p className="error-message">{error}</p>}
-          {!loading && !error && devices.length === 0 && <p>Chưa có thiết bị. Hãy nạp dữ liệu vào cơ sở dữ liệu.</p>}
-          {!loading && !error && devices.length > 0 && filteredDevices.length === 0 && <p>Không có thiết bị khớp bộ lọc.</p>}
+          {loading && <StateMessage variant="loading" title="Đang tải thiết bị..." />}
+          {error && <StateMessage variant="error" title="Lỗi tải dữ liệu">{error}</StateMessage>}
+          {!loading && !error && devices.length === 0 && <StateMessage variant="empty">Chưa có thiết bị. Hãy nạp dữ liệu vào cơ sở dữ liệu.</StateMessage>}
+          {!loading && !error && devices.length > 0 && filteredDevices.length === 0 && <StateMessage variant="empty">Không có thiết bị khớp bộ lọc.</StateMessage>}
 
           <DataTable<DeviceEntity>
             columns={[

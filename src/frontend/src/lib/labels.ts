@@ -132,3 +132,70 @@ export function displayValue(value?: string | number | null, fallback = 'Chưa c
 export function shortText(value?: string | null, fallback = 'Chưa có'): string {
   return displayValue(value, fallback);
 }
+
+// ---- Shared utilities extracted from pages ----
+
+export function formatTimestamp(value: string | null | undefined): string {
+  if (!value) return '—';
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleString('vi-VN');
+  } catch {
+    return value;
+  }
+}
+
+export function timeSince(value: string | null | undefined): string {
+  if (!value) return '—';
+  try {
+    const d = new Date(value).getTime();
+    if (Number.isNaN(d)) return value;
+    const diff = Date.now() - d;
+    if (diff < 0) return 'vừa xong';
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return `${s}s trước`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} phút trước`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} giờ trước`;
+    const days = Math.floor(h / 24);
+    return `${days} ngày trước`;
+  } catch {
+    return value;
+  }
+}
+
+export const AGENT_STATUS_TONE: Record<string, string> = {
+  active: 'status-pill status-pill--ok',
+  enrolled: 'status-pill status-pill--info',
+  offline: 'status-pill status-pill--warn',
+  revoked: 'status-pill status-pill--danger',
+};
+
+export const AGENT_STATUS_LABEL: Record<string, string> = {
+  active: 'Đang hoạt động',
+  enrolled: 'Đã đăng ký',
+  offline: 'Mất kết nối',
+  revoked: 'Đã thu hồi',
+};
+
+export function parseTimestamp(value: string | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function matchesTimeRange(
+  value: string | undefined,
+  allValues: (string | undefined)[],
+  range: string,
+): boolean {
+  if (range === 'all') return true;
+  const current = parseTimestamp(value);
+  if (!current) return false;
+  const maxTime = Math.max(...allValues.map((item) => parseTimestamp(item)?.getTime() ?? 0));
+  if (!maxTime) return true;
+  const hours = range === '24h' ? 24 : range === '7d' ? 24 * 7 : 24 * 30;
+  return current.getTime() >= maxTime - hours * 60 * 60 * 1000;
+}

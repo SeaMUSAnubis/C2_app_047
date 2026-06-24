@@ -3,6 +3,7 @@ import { Lock, Save, UserCog, X } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import type { Column } from '../components/security/DataTable';
+import { StateMessage } from '../components/security/StateMessage';
 import { listAccounts, createAccount, updateAccount } from '../lib/apiClient';
 import type { AccountRow } from '../lib/apiClient';
 import { roleLabel, roleOptions } from '../lib/labels';
@@ -114,9 +115,9 @@ export default function AdminAccountsPage() {
       <PageHeader eyebrow="Quản trị hệ thống" title="Tài khoản hệ thống" description="Tạo, sửa và khóa tài khoản đăng nhập. Không thể xóa tài khoản, chỉ khóa." actions={<button className="secondary-action" onClick={openCreate}><UserCog size={17} /> Thêm tài khoản</button>} />
 
       <section className="panel-card">
-        {loading && <p>Đang tải tài khoản...</p>}
-        {error && <p className="error-message">{error}</p>}
-        {!loading && !error && accounts.length === 0 && <p>Chưa có tài khoản nào.</p>}
+        {loading && <StateMessage variant="loading" title="Đang tải tài khoản..." />}
+        {error && <StateMessage variant="error" title="Lỗi tải dữ liệu">{error}</StateMessage>}
+        {!loading && !error && accounts.length === 0 && <StateMessage variant="empty">Chưa có tài khoản nào.</StateMessage>}
         <DataTable<AccountRow>
           columns={columns}
           rows={accounts}

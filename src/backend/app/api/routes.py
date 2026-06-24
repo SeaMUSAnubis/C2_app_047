@@ -607,10 +607,23 @@ async def analyze(
 @router.post("/analysis/analyze-all")
 async def analyze_all(
     current_account: Annotated[dict, Depends(require_role("admin", "security_manager"))],
+    payload: dict | None = None,
 ) -> dict:
     _ = current_account
+    from datetime import datetime, timedelta, timezone
     from src.backend.app.db.session import create_alert, get_connection, list_event_logs_for_user
     from src.backend.app.services.demo_pipeline import demo_pipeline
+
+    # Compute since timestamp from time_range
+    time_range = (payload or {}).get("time_range", "24h")
+    since: str | None = None
+    if time_range == "24h":
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    elif time_range == "7d":
+        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    elif time_range == "30d":
+        since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    # else: None (no time filter)
 
     # Known mock user IDs from generate_mock_data.py (always these 8).
     # We check which exist in the DB instead of scanning 18M event_logs rows.
@@ -619,7 +632,7 @@ async def analyze_all(
         "BTR0002", "ACM0001", "CNL0003", "ADM0099",
     ]
 
-    print("\n[Analysis All] Bắt đầu phân tích mock users...")
+    print(f"\n[Analysis All] Bắt đầu phân tích mock users... (time_range={time_range}, since={since})")
 
     # Verify which mock users actually have event data
     with get_connection() as conn:
@@ -636,7 +649,7 @@ async def analyze_all(
 
     for _i, user_id in enumerate(active_ids):
         print(f"[{_i+1}/{len(active_ids)}] Analyzing {user_id}...")
-        events = list_event_logs_for_user(user_id, limit=2000)
+        events = list_event_logs_for_user(user_id, since=since, limit=2000)
         if not events:
             continue
         result = demo_pipeline.analyze(events, user_id)
@@ -650,9 +663,9 @@ async def analyze_all(
             risk_score = result.get("risk_score", 0)
             
             if top_factors:
-                title = f"Suspicious Behavior: {', '.join(top_factors)}"
+                title = f"Hành vi đáng ngờ: {', '.join(top_factors)}"
             else:
-                title = "Suspicious Behavior Detected"
+                title = "Hành vi đáng ngờ"
                 
             alert_payload = {
                 "user_id": user_id,

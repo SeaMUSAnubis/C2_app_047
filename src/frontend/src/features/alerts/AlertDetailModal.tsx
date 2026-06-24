@@ -50,14 +50,6 @@ export function AlertDetailModal({ alert, onClose }: Props) {
           </div>
         </div>
         <div className="alert-detail-body">
-          <div className="alert-detail-content">
-            <h3>Giải thích</h3>
-            {alert.explanation ? (
-              <p className="alert-explanation">{alert.explanation}</p>
-            ) : (
-              <p className="text-muted">Chưa có giải thích. Mở chat để yêu cầu AI phân tích.</p>
-            )}
-          </div>
           {chatOpen && (
             <ChatPanel
               alertId={alert.id}

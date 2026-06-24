@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Cpu, Power, RefreshCcw, ShieldOff } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Cpu, RefreshCcw, ShieldOff } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { useAuth } from '../store/useAuth';
 import {
@@ -11,31 +11,11 @@ import {
 } from '../lib/apiClient';
 import type { AgentConfigResponse, AgentEntity } from '../types';
 import type { AlertItem } from '../types/security';
-
-const STATUS_TONE: Record<string, string> = {
-  active: 'status-pill status-pill--ok',
-  enrolled: 'status-pill status-pill--info',
-  offline: 'status-pill status-pill--warn',
-  revoked: 'status-pill status-pill--danger',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  active: 'Đang hoạt động',
-  enrolled: 'Đã đăng ký',
-  offline: 'Mất kết nối',
-  revoked: 'Đã thu hồi',
-};
-
-function formatTime(value: string | null | undefined): string {
-  if (!value) return '—';
-  try {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    return d.toLocaleString('vi-VN');
-  } catch {
-    return value;
-  }
-}
+import {
+  AGENT_STATUS_LABEL,
+  AGENT_STATUS_TONE,
+  formatTimestamp,
+} from '../lib/labels';
 
 export default function AgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>();
@@ -139,7 +119,7 @@ export default function AgentDetailPage() {
       <PageHeader
         eyebrow={`Agent ${agent.agent_id}`}
         title={agent.hostname}
-        description={`OS: ${agent.os ?? '—'}${agent.os_version ? ` ${agent.os_version}` : ''} · Đăng ký: ${formatTime(agent.enrolled_at)}`}
+        description={`OS: ${agent.os ?? '—'}${agent.os_version ? ` ${agent.os_version}` : ''} · Đăng ký: ${formatTimestamp(agent.enrolled_at)}`}
         actions={
           <div className="action-row">
             <Link to="/admin/agents" className="secondary-action">
@@ -168,22 +148,22 @@ export default function AgentDetailPage() {
           <Cpu size={18} />
           <div>
             <span className="info-label">Trạng thái</span>
-            <span className={STATUS_TONE[agent.status] ?? 'status-pill'}>
-              {STATUS_LABEL[agent.status] ?? agent.status}
+            <span className={AGENT_STATUS_TONE[agent.status] ?? 'status-pill'}>
+              {AGENT_STATUS_LABEL[agent.status] ?? agent.status}
             </span>
           </div>
         </div>
         <div className="info-card">
-          <span className="info-label">Policy version</span>
+          <span className="info-label">Phiên bản chính sách</span>
           <strong className="mono">{agent.policy_version}</strong>
         </div>
         <div className="info-card">
           <span className="info-label">Heartbeat gần nhất</span>
-          <strong>{formatTime(agent.last_heartbeat)}</strong>
+          <strong>{formatTimestamp(agent.last_heartbeat)}</strong>
         </div>
         <div className="info-card">
-          <span className="info-label">Config pull gần nhất</span>
-          <strong>{formatTime(agent.last_config_pull)}</strong>
+          <span className="info-label">Lần cuối lấy cấu hình</span>
+          <strong>{formatTimestamp(agent.last_config_pull)}</strong>
         </div>
         <div className="info-card">
           <span className="info-label">Thiết bị gán</span>
@@ -197,14 +177,14 @@ export default function AgentDetailPage() {
 
       {config && (
         <section className="panel-card">
-          <h3>Cấu hình hiện tại (mà agent đang dùng)</h3>
+          <h3>Cấu hình hiện tại (agent đang dùng)</h3>
           <div className="info-grid">
             <div className="info-card">
-              <span className="info-label">Sampling rate</span>
+              <span className="info-label">Tỷ lệ thu thập</span>
               <strong>{config.policy.sampling_rate}%</strong>
             </div>
             <div className="info-card">
-              <span className="info-label">Config version</span>
+              <span className="info-label">Phiên bản cấu hình</span>
               <strong className="mono">{config.config_version}</strong>
             </div>
           </div>
@@ -236,21 +216,21 @@ export default function AgentDetailPage() {
       )}
 
       <section className="panel-card">
-        <h3>Alert gần đây của người dùng được gán</h3>
+        <h3>Cảnh báo gần đây của người dùng được gán</h3>
         {alerts.length === 0 ? (
           <p className="text-muted">
             {agent.assigned_user_id
-              ? 'Chưa có alert cho người dùng này.'
-              : 'Agent chưa được gán cho người dùng cụ thể — không có alert liên kết.'}
+              ? 'Chưa có cảnh báo cho người dùng này.'
+              : 'Agent chưa được gán cho người dùng cụ thể — không có cảnh báo liên kết.'}
           </p>
         ) : (
           <ul className="alert-timeline">
             {alerts.map((a) => (
               <li key={a.id}>
-                <Power size={14} />
+                <AlertTriangle size={14} />
                 <span className="alert-title">{a.title}</span>
                 <span className={`severity-pill severity-pill--${a.severity}`}>{a.severity}</span>
-                <span className="text-muted-small">{formatTime(a.timestamp ?? a.time)}</span>
+                <span className="text-muted-small">{formatTimestamp(a.timestamp ?? a.time)}</span>
               </li>
             ))}
           </ul>

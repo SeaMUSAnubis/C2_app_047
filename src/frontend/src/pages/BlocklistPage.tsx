@@ -3,6 +3,7 @@ import { Plus, ShieldBan, Trash2, X } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import type { Column } from '../components/security/DataTable';
+import { StateMessage } from '../components/security/StateMessage';
 import {
   addBlocklistEntry,
   listBlocklist,
@@ -190,8 +191,8 @@ export default function BlocklistPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Quản trị danh sách chặn"
-        title="Website bị chặn"
-        description="Domain/URL/IP sẽ bị agent chặn và gửi event 'http' với action=blocked. Đồng bộ xuống tất cả agent đang hoạt động."
+        title="Danh sách chặn"
+        description="Tên miền/URL/IP sẽ bị agent chặn và gửi sự kiện 'http' với action=blocked. Đồng bộ xuống tất cả agent đang hoạt động."
         actions={
           <button
             className="primary-action"
@@ -298,7 +299,7 @@ export default function BlocklistPage() {
 
       <section className="panel-card">
         {loading ? (
-          <p>Đang tải blocklist...</p>
+          <StateMessage variant="loading" title="Đang tải danh sách chặn..." />
         ) : (
           <DataTable<BlocklistEntry>
             columns={columns}

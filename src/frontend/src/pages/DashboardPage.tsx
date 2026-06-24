@@ -1,17 +1,25 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Activity, AlertTriangle, Bot, Database, MessageSquare, Monitor, Play, ShieldCheck, TrendingUp, Users } from 'lucide-react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
+import { Activity, AlertTriangle, Bot, Database, MessageSquare, Monitor, Play, ShieldCheck, Users } from 'lucide-react';
 import { ChartCard } from '../components/security/ChartCard';
 import { BarChart, DonutChart, LineChart } from '../components/security/Charts';
 import { DataTable } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
 import { SeverityBadge } from '../components/security/SeverityBadge';
 import { StatCard } from '../components/security/StatCard';
+import { StateMessage } from '../components/security/StateMessage';
 import { AlertDetailModal } from '../features/alerts/AlertDetailModal';
 import { analyzeAllDemo, getDashboardOverview } from '../lib/apiClient';
-import { formatDateTime, shortText } from '../lib/labels';
+import { formatDateTime, shortText, timeSince, eventTypeLabel } from '../lib/labels';
 import type { DashboardOverview, RiskyEntity } from '../types/security';
 
-const icons = [Users, Monitor, Database, AlertTriangle, ShieldCheck, TrendingUp];
+const kpiIcons: Record<string, ComponentType<{ size?: number }>> = {
+  'Người dùng': Users,
+  'Thiết bị': Monitor,
+  'Nhật ký': Database,
+  'Cảnh báo': AlertTriangle,
+  'Nguy cơ cao': ShieldCheck,
+  'Rủi ro': Activity,
+};
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardOverview | null>(null);
@@ -57,7 +65,7 @@ export default function DashboardPage() {
     setRunningAnalysis(true);
     setAnalysisMessage('Đang chạy analysis trên dữ liệu trong database...');
     try {
-      const result = await analyzeAllDemo() as { total_users_analyzed?: number; anomalies_found?: number };
+      const result = await analyzeAllDemo(timeRange) as { total_users_analyzed?: number; anomalies_found?: number };
       setAnalysisMessage(`Analysis hoàn tất: ${result.total_users_analyzed ?? 0} users, ${result.anomalies_found ?? 0} anomalies.`);
       await loadOverview();
     } catch (err: unknown) {
@@ -67,16 +75,16 @@ export default function DashboardPage() {
     }
   }
 
-  if (loading) return <div className="panel-card">Đang tải dữ liệu tổng quan...</div>;
-  if (error) return <div className="panel-card error-state"><h3>Lỗi tải dữ liệu</h3><p>{error}</p></div>;
-  if (!data) return <div className="panel-card">Chưa có dữ liệu. Hãy nạp dữ liệu hoặc chạy phân tích.</div>;
+  if (loading) return <div className="panel-card"><StateMessage variant="loading" title="Đang tải dữ liệu tổng quan..." /></div>;
+  if (error) return <div className="panel-card"><StateMessage variant="error" title="Lỗi tải dữ liệu">{error}</StateMessage></div>;
+  if (!data) return <div className="panel-card"><StateMessage variant="empty">Chưa có dữ liệu. Hãy nạp dữ liệu hoặc chạy phân tích.</StateMessage></div>;
 
   return (
     <div className="page-stack">
       <section className="hero-panel">
         <div>
-          <span className="eyebrow">Tổng quan</span>
-          <h1>Bảng điều khiển UEBA</h1>
+          <span className="eyebrow">Bảng điều khiển</span>
+          <h1>Tổng quan UEBA</h1>
           <p>Giám sát bất thường hành vi người dùng, thiết bị, nhật ký và mẫu truy cập trên toàn bộ thiết bị đầu cuối.</p>
         </div>
         <div className="hero-actions">
@@ -91,8 +99,8 @@ export default function DashboardPage() {
       {analysisMessage && <section className="filter-summary"><span>{analysisMessage}</span><span>Khoảng thời gian: {timeRange === '24h' ? '24 giờ' : timeRange === '7d' ? '7 ngày' : '30 ngày'}</span></section>}
 
       <section className="stat-grid">
-        {data.kpis.map((item, index) => {
-          const Icon = icons[index];
+        {data.kpis.map((item) => {
+          const Icon = kpiIcons[item.label] ?? Activity;
           return <StatCard key={item.label} {...item} icon={<Icon size={22} />} />;
         })}
       </section>
@@ -128,7 +136,6 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       className="secondary-action"
-                      style={{ marginTop: 8 }}
                       onClick={() => setChatAlert(alert)}
                     >
                       <MessageSquare size={14} />
@@ -155,11 +162,11 @@ export default function DashboardPage() {
             ) : (
               data.timeline.map((event) => (
                 <div className={`timeline-row severity-${event.severity}`} key={`${event.time}-${event.title}-${event.detail}`}>
-                  <time>{formatDateTime(event.time)}</time>
+                  <time>{timeSince(event.time)}</time>
                   <div>
                     <strong>{event.title}</strong>
                     <p>{event.detail}</p>
-                    <span>{event.type}</span>
+                    <span>{eventTypeLabel(event.type)}</span>
                   </div>
                 </div>
               ))
