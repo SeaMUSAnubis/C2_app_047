@@ -1,3 +1,10 @@
+# ── docker-compose.yml ──────────────────────────────────────────────────
+# Works on Linux, Windows (Docker Desktop + WSL2), and macOS.
+#
+# Windows users: clone this repo inside WSL2 (e.g. /home/.../project) for
+# best bind-mount performance. Mounts from the Windows filesystem (C:\...)
+# work but are significantly slower.
+
 services:
   app:
     build:
