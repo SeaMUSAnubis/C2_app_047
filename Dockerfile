@@ -1,3 +1,9 @@
+# syntax=docker/dockerfile:1
+# ── All-in-one image (frontend + backend + PostgreSQL) ──────────────────
+# Works on Linux, Windows (Docker Desktop/WSL2), and macOS.
+# On Windows: clone the repo inside WSL2 for best volume-mount performance.
+
+# ── Stage 1: build Vue/Vite frontend ────────────────────────────────────
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
@@ -9,6 +15,7 @@ ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
+# ── Stage 2: Python app + embedded PostgreSQL ───────────────────────────
 FROM python:3.11-slim AS app
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -36,8 +43,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
 COPY --from=frontend-builder /frontend/dist ./src/frontend/dist
+
+# Entrypoint script — strip Windows CR characters so the script runs even
+# when the repo was checked out with CRLF on a Windows host.
 COPY scripts/docker/all_in_one_entrypoint.sh /usr/local/bin/all_in_one_entrypoint.sh
-RUN chmod +x /usr/local/bin/all_in_one_entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/all_in_one_entrypoint.sh \
+    && chmod +x /usr/local/bin/all_in_one_entrypoint.sh
 
 EXPOSE 8000 5432
 
