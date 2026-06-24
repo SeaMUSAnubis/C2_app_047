@@ -1,18 +1,13 @@
 import { memo } from 'react';
 import { clsx } from 'clsx';
 import { useChatStore } from '../../store/chatStore';
+import { formatMarkdown } from '../../lib/formatMarkdown';
 import type { ChatMessage } from '../../lib/apiClient';
 
 interface Props {
   message: ChatMessage;
 }
 
-/**
- * Static bubble — renders committed message content. Wrapped in React.memo so
- * it skips re-render when an SSE token updates `streamingContent` on a sibling
- * bubble. This is the hot path optimisation: 100 tokens = 100 streaming
- * bubble re-renders, NOT 100× full-list re-renders.
- */
 export const MessageBubble = memo(function MessageBubble({ message }: Props) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
@@ -20,7 +15,8 @@ export const MessageBubble = memo(function MessageBubble({ message }: Props) {
   const streamingContent = useChatStore((s) => s.streamingContent);
 
   const isStreamingThis = isAssistant && message.id === streamingMessageId;
-  const displayContent = isStreamingThis ? streamingContent : message.content;
+  const rawContent = isStreamingThis ? streamingContent : message.content;
+  const displayContent = isAssistant && !isStreamingThis ? formatMarkdown(rawContent) : rawContent;
 
   return (
     <div
@@ -31,7 +27,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: Props) {
       })}
     >
       <div className="chat-bubble-meta">
-        {isUser ? 'Bạn' : isAssistant ? 'AI' : 'Hệ thống'}
+        {isUser ? 'Bạn' : isAssistant ? 'AI · Vespionage' : 'Hệ thống'}
         {message.model && isAssistant && !isStreamingThis && (
           <span className="chat-bubble-model">
             {message.model}
@@ -39,8 +35,13 @@ export const MessageBubble = memo(function MessageBubble({ message }: Props) {
           </span>
         )}
       </div>
-      <div className="chat-bubble-content">
-        {displayContent}
+      <div
+        className="chat-bubble-content"
+        dangerouslySetInnerHTML={
+          isAssistant && !isStreamingThis ? { __html: displayContent } : undefined
+        }
+      >
+        {isAssistant && !isStreamingThis ? null : displayContent}
         {isStreamingThis && <span className="chat-cursor" aria-hidden>|</span>}
       </div>
       {isAssistant && !isStreamingThis && message.memory_used_ids && message.memory_used_ids.length > 0 && (

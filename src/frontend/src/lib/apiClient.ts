@@ -22,6 +22,17 @@ function handleAuthFailure(response: Response) {
   return false;
 }
 
+async function safeParseJSON<T>(response: Response, path: string): Promise<T> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // Nếu response không phải JSON (VD: HTML error page từ proxy/backend)
+    const preview = text.slice(0, 200).replace(/\n/g, ' ');
+    throw new Error(`API trả về dữ liệu không hợp lệ cho ${path}: "${preview}..."`);
+  }
+}
+
 async function request<T>(path: string): Promise<T> {
   if (!API_BASE_URL) {
     throw new Error('Thiếu cấu hình API base URL');
@@ -39,10 +50,10 @@ async function request<T>(path: string): Promise<T> {
     if (handleAuthFailure(response)) {
       throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
     }
-    throw new Error(`Lỗi API ${response.status}`);
+    throw new Error(`Lỗi API ${response.status} (${path})`);
   }
 
-  return response.json() as Promise<T>;
+  return safeParseJSON<T>(response, path);
 }
 
 async function requestWithTotal<T>(path: string): Promise<{ rows: T; total: number }> {
@@ -62,15 +73,19 @@ async function requestWithTotal<T>(path: string): Promise<{ rows: T; total: numb
     if (handleAuthFailure(response)) {
       throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
     }
-    throw new Error(`Lỗi API ${response.status}`);
+    throw new Error(`Lỗi API ${response.status} (${path})`);
   }
 
-  const parsed = (await response.json()) as unknown;
-  const body = parsed as T | { items: T };
+  const text = await response.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    const preview = text.slice(0, 200).replace(/\n/g, ' ');
+    throw new Error(`API trả về dữ liệu không hợp lệ cho ${path}: "${preview}..."`);
+  }
   const total = Number(response.headers.get('X-Total-Count') ?? 0);
-  // Some endpoints return `items` (e.g. /agents) and others `rows` (default).
-  // Accept both for backwards compatibility.
-  const rows: T = Array.isArray(parsed) ? (parsed as T) : (body as { items: T }).items;
+  const rows: T = Array.isArray(parsed) ? (parsed as T) : (parsed as { items: T }).items;
   return { rows, total };
 }
 
@@ -147,7 +162,7 @@ export async function analyzeDemo(payload: ApiPayload) {
   return response.json();
 }
 
-export async function analyzeAllDemo() {
+export async function analyzeAllDemo(timeRange?: string) {
   if (!API_BASE_URL) {
     throw new Error('Thiếu API base URL để chạy phân tích demo');
   }
@@ -158,7 +173,8 @@ export async function analyzeAllDemo() {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    }
+    },
+    body: JSON.stringify({ time_range: timeRange ?? '24h' }),
   });
 
   if (!response.ok) {

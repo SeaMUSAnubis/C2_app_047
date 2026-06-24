@@ -1,4 +1,6 @@
 import { useChatStore } from '../../store/chatStore';
+import { severityLabel } from '../../lib/labels';
+import type { Severity } from '../../types/security';
 
 interface Props {
   alertId: number;
@@ -8,10 +10,8 @@ interface Props {
   onOpenFeedback: () => void;
 }
 
-export function ChatHeader({ alertId, alertTitle, severity, onClose, onOpenFeedback }: Props) {
+export function ChatHeader({ alertId, alertTitle, severity, onOpenFeedback }: Props) {
   const resetConversation = useChatStore((s) => s.resetConversation);
-  const deleteConversation = useChatStore((s) => s.deleteConversation);
-  const updateTitle = useChatStore((s) => s.updateTitle);
   const messages = useChatStore((s) => s.messages);
   const usedMemoryIds = useChatStore((s) => s.usedMemoryIds);
   const title = useChatStore((s) => s.title);
@@ -20,14 +20,15 @@ export function ChatHeader({ alertId, alertTitle, severity, onClose, onOpenFeedb
   return (
     <div className="chat-header">
       <div className="chat-header-info">
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Đóng chat">
-          ×
-        </button>
         <div>
-          <h3>Thảo luận với AI</h3>
+          <h3>AI Phân tích</h3>
           <p className="chat-header-subtitle">
             {displayTitle}
-            {severity && <span className={`severity-pill severity-pill--${severity}`}>{severity}</span>}
+            {severity && (
+              <span className={`severity-pill severity-pill--${severity}`}>
+                {severityLabel(severity as Severity)}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -37,45 +38,21 @@ export function ChatHeader({ alertId, alertTitle, severity, onClose, onOpenFeedb
             🧠 {usedMemoryIds.length}
           </span>
         )}
+        {messages.length > 0 && (
+          <button
+            type="button"
+            className="secondary-action"
+            onClick={() => {
+              if (confirm('Xóa toàn bộ lịch sử hội thoại?')) {
+                void resetConversation(alertId);
+              }
+            }}
+          >
+            Xoá lịch sử
+          </button>
+        )}
         <button type="button" className="secondary-action" onClick={onOpenFeedback}>
-          Gửi feedback
-        </button>
-        <button
-          type="button"
-          className="secondary-action"
-          onClick={() => {
-            const next = prompt('Đổi tiêu đề hội thoại', displayTitle);
-            if (next && next.trim() && next.trim() !== displayTitle) {
-              void updateTitle(alertId, next.trim());
-            }
-          }}
-          disabled={messages.length === 0}
-        >
-          Đổi tên
-        </button>
-        <button
-          type="button"
-          className="secondary-action"
-          onClick={() => {
-            if (confirm('Xóa toàn bộ lịch sử hội thoại?')) {
-              void resetConversation(alertId);
-            }
-          }}
-          disabled={messages.length === 0}
-        >
-          Reset
-        </button>
-        <button
-          type="button"
-          className="secondary-action table-action--danger"
-          onClick={() => {
-            if (confirm('Xóa hẳn hội thoại này?')) {
-              void deleteConversation(alertId);
-            }
-          }}
-          disabled={messages.length === 0}
-        >
-          Xóa
+          Gửi phản hồi
         </button>
       </div>
     </div>

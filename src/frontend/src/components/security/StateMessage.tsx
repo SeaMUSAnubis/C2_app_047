@@ -8,7 +8,11 @@ interface StateMessageProps {
 
 export function StateMessage({ variant, title, children }: StateMessageProps) {
   if (variant === 'loading') {
-    return <p className="state-message state-loading">{title ?? 'Đang tải dữ liệu...'}</p>;
+    return (
+      <div className="state-message state-loading">
+        <span>{title ?? 'Đang tải dữ liệu...'}</span>
+      </div>
+    );
   }
   if (variant === 'error') {
     return (
@@ -18,5 +22,9 @@ export function StateMessage({ variant, title, children }: StateMessageProps) {
       </div>
     );
   }
-  return <p className="state-message state-empty">{children ?? title ?? 'Không có dữ liệu'}</p>;
+  return (
+    <div className="state-message state-empty">
+      <p>{children ?? title ?? 'Không có dữ liệu'}</p>
+    </div>
+  );
 }

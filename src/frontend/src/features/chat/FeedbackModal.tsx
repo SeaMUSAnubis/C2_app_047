@@ -8,9 +8,9 @@ interface Props {
 }
 
 const VERDICTS: { value: FeedbackVerdict; label: string; tone: string }[] = [
-  { value: 'true_positive', label: 'True positive', tone: 'danger' },
-  { value: 'false_positive', label: 'False positive', tone: 'success' },
-  { value: 'benign', label: 'Benign (bình thường)', tone: 'info' },
+  { value: 'true_positive', label: 'Đúng - Có bất thường', tone: 'danger' },
+  { value: 'false_positive', label: 'Sai - Dương tính giả', tone: 'success' },
+  { value: 'benign', label: 'Lành tính', tone: 'info' },
   { value: 'needs_investigation', label: 'Cần điều tra thêm', tone: 'warn' },
 ];
 

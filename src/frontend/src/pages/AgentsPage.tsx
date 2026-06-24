@@ -12,51 +12,12 @@ import {
   revokeAgent,
 } from '../lib/apiClient';
 import type { AgentEntity, AgentEnrollmentToken } from '../types';
-
-const STATUS_TONE: Record<string, string> = {
-  active: 'status-pill status-pill--ok',
-  enrolled: 'status-pill status-pill--info',
-  offline: 'status-pill status-pill--warn',
-  revoked: 'status-pill status-pill--danger',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  active: 'Đang hoạt động',
-  enrolled: 'Đã đăng ký',
-  offline: 'Mất kết nối',
-  revoked: 'Đã thu hồi',
-};
-
-function formatTime(value: string | null | undefined): string {
-  if (!value) return '—';
-  try {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    return d.toLocaleString('vi-VN');
-  } catch {
-    return value;
-  }
-}
-
-function timeSince(value: string | null | undefined): string {
-  if (!value) return '—';
-  try {
-    const d = new Date(value).getTime();
-    if (Number.isNaN(d)) return value;
-    const diff = Date.now() - d;
-    if (diff < 0) return 'vừa xong';
-    const s = Math.floor(diff / 1000);
-    if (s < 60) return `${s}s trước`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m} phút trước`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h} giờ trước`;
-    const days = Math.floor(h / 24);
-    return `${days} ngày trước`;
-  } catch {
-    return value;
-  }
-}
+import {
+  AGENT_STATUS_LABEL,
+  AGENT_STATUS_TONE,
+  formatTimestamp,
+  timeSince,
+} from '../lib/labels';
 
 export default function AgentsPage() {
   const { user } = useAuth();
@@ -162,7 +123,7 @@ export default function AgentsPage() {
       key: 'status',
       header: 'Trạng thái',
       render: (a) => (
-        <span className={STATUS_TONE[a.status] ?? 'status-pill'}>{STATUS_LABEL[a.status] ?? a.status}</span>
+        <span className={AGENT_STATUS_TONE[a.status] ?? 'status-pill'}>{AGENT_STATUS_LABEL[a.status] ?? a.status}</span>
       ),
     },
     {
@@ -175,7 +136,7 @@ export default function AgentsPage() {
       key: 'last_heartbeat',
       header: 'Heartbeat',
       render: (a) => (
-        <span title={formatTime(a.last_heartbeat)}>
+        <span title={formatTimestamp(a.last_heartbeat)}>
           {timeSince(a.last_heartbeat)}
         </span>
       ),
@@ -183,7 +144,7 @@ export default function AgentsPage() {
     {
       key: 'enrolled_at',
       header: 'Đăng ký',
-      render: (a) => formatTime(a.enrolled_at),
+      render: (a) => formatTimestamp(a.enrolled_at),
     },
     {
       key: 'actions',
@@ -209,8 +170,8 @@ export default function AgentsPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Quản trị agent"
-        title="Endpoint agents"
-        description="Danh sách agent đã cài trên máy nhân viên. Cấp enrollment token, theo dõi heartbeat, thu hồi khi cần."
+        title="Quản lý endpoint agent"
+        description="Danh sách agent đã cài trên máy nhân viên. Cấp token đăng ký, theo dõi heartbeat, thu hồi khi cần."
         actions={
           isAdmin ? (
             <div className="action-row">
@@ -236,7 +197,7 @@ export default function AgentsPage() {
               className={`filter-pill ${statusFilter === s ? 'active' : ''}`}
               onClick={() => setStatusFilter(s)}
             >
-              {s === 'all' ? 'Tất cả' : STATUS_LABEL[s] ?? s}
+              {s === 'all' ? 'Tất cả' : AGENT_STATUS_LABEL[s] ?? s}
               <span className="filter-pill-count">{counts[s] ?? 0}</span>
             </button>
           ))}
@@ -268,7 +229,7 @@ export default function AgentsPage() {
             </div>
             <p className="text-muted">
               Token này chỉ hiển thị <strong>một lần</strong>. Hãy sao chép và đưa cho quản trị viên máy
-              trạm để chạy lệnh enroll. Token hết hạn lúc <code>{formatTime(tokenModal.expires_at)}</code>.
+              trạm để chạy lệnh enroll. Token hết hạn lúc <code>{formatTimestamp(tokenModal.expires_at)}</code>.
             </p>
             <pre className="token-block">{tokenModal.token}</pre>
             <div className="modal-actions">

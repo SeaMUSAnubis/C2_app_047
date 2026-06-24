@@ -4,9 +4,10 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
 import { SeverityBadge, StatusBadge } from '../components/security/SeverityBadge';
+import { StateMessage } from '../components/security/StateMessage';
 import { AlertDetailModal } from '../features/alerts/AlertDetailModal';
 import { getAlerts } from '../lib/apiClient';
-import { formatDateTime, severityOptions, shortText, statusOptions } from '../lib/labels';
+import { formatDateTime, matchesTimeRange, severityOptions, shortText, statusOptions } from '../lib/labels';
 import type { AlertItem } from '../types/security';
 
 const PAGE_SIZE = 25;
@@ -70,7 +71,7 @@ export default function AlertsPage() {
       const matchesEntity = entity === 'all'
         || (entity === 'user' && Boolean(alert.user))
         || (entity === 'device' && Boolean(alert.device));
-      const matchesTime = matchesDatasetTimeRange(alert.timestamp ?? alert.time, alerts.map((item) => item.timestamp ?? item.time), timeRange);
+      const matchesTime = matchesTimeRange(alert.timestamp ?? alert.time, alerts.map((item) => item.timestamp ?? item.time), timeRange);
       return matchesSearch && matchesSeverity && matchesStatus && matchesEntity && matchesTime;
     });
   }, [alerts, entity, search, severity, status, timeRange]);
@@ -103,10 +104,10 @@ export default function AlertsPage() {
 
       <section className="alerts-layout">
         <div className="panel-card">
-          {loading && <p>Đang tải cảnh báo...</p>}
-          {error && <p className="error-message">{error}</p>}
-          {!loading && !error && alerts.length === 0 && <p>Chưa có cảnh báo. Hãy nạp dữ liệu hoặc chạy phân tích.</p>}
-          {!loading && !error && alerts.length > 0 && filteredAlerts.length === 0 && <p>Không có cảnh báo khớp bộ lọc.</p>}
+          {loading && <StateMessage variant="loading" title="Đang tải cảnh báo..." />}
+          {error && <StateMessage variant="error" title="Lỗi tải dữ liệu">{error}</StateMessage>}
+          {!loading && !error && alerts.length === 0 && <StateMessage variant="empty">Chưa có cảnh báo. Hãy nạp dữ liệu hoặc chạy phân tích.</StateMessage>}
+          {!loading && !error && alerts.length > 0 && filteredAlerts.length === 0 && <StateMessage variant="empty">Không có cảnh báo khớp bộ lọc.</StateMessage>}
           <DataTable<AlertItem>
             columns={[
               { key: 'title', header: 'Cảnh báo', width: '24%', render: (a) => (<div className="cell-main" title={a.title}><strong>{a.title}</strong><span className="muted-line">{a.id}</span></div>) },
@@ -193,7 +194,6 @@ export default function AlertsPage() {
             <button
               type="button"
               className="primary-action"
-              style={{ marginTop: 16, width: '100%' }}
               onClick={() => setChatAlert(selected)}
             >
               <MessageSquare size={16} />
@@ -220,18 +220,3 @@ export default function AlertsPage() {
   );
 }
 
-function matchesDatasetTimeRange(value: string | undefined, allValues: (string | undefined)[], range: string) {
-  if (range === 'all') return true;
-  const current = parseTime(value);
-  if (!current) return false;
-  const maxTime = Math.max(...allValues.map((item) => parseTime(item)?.getTime() ?? 0));
-  if (!maxTime) return true;
-  const hours = range === '24h' ? 24 : range === '7d' ? 24 * 7 : 24 * 30;
-  return current.getTime() >= maxTime - hours * 60 * 60 * 1000;
-}
-
-function parseTime(value: string | undefined) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}

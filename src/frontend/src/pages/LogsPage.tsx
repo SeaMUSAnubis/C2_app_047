@@ -5,9 +5,10 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { DataTable } from '../components/security/DataTable';
 import type { Column } from '../components/security/DataTable';
 import { RiskScore } from '../components/security/RiskScore';
+import { StateMessage } from '../components/security/StateMessage';
 import { StatusBadge } from '../components/security/SeverityBadge';
 import { getLogs } from '../lib/apiClient';
-import { eventTypeLabel, formatDateTime, severityOptions, shortText } from '../lib/labels';
+import { eventTypeLabel, formatDateTime, matchesTimeRange, severityOptions, shortText } from '../lib/labels';
 import type { EventLogItem } from '../types/security';
 
 const PAGE_SIZE = 25;
@@ -77,7 +78,7 @@ export function LogsPage() {
         .some((value) => String(value).toLowerCase().includes(term));
       const matchesType = eventType === 'all' || log.eventType === eventType;
       const matchesSeverity = severity === 'all' || log.severity === severity;
-      const matchesTime = matchesDatasetTimeRange(log.timestamp, logs.map((item) => item.timestamp), timeRange);
+      const matchesTime = matchesTimeRange(log.timestamp, logs.map((item) => item.timestamp), timeRange);
       const matchesResult = result === 'all' || log.result === result;
       return matchesSearch && matchesType && matchesSeverity && matchesTime && matchesResult;
     });
@@ -143,10 +144,10 @@ export function LogsPage() {
 
       <section className="entity-layout">
         <div className="panel-card">
-          {loading && <p>Đang tải nhật ký...</p>}
-          {error && <p className="error-message">{error}</p>}
-          {!loading && !error && logs.length === 0 && <p>Chưa có nhật ký. Hãy nạp dữ liệu vào cơ sở dữ liệu.</p>}
-          {!loading && !error && logs.length > 0 && filteredLogs.length === 0 && <p>Không có nhật ký khớp bộ lọc.</p>}
+          {loading && <StateMessage variant="loading" title="Đang tải nhật ký..." />}
+          {error && <StateMessage variant="error" title="Lỗi tải dữ liệu">{error}</StateMessage>}
+          {!loading && !error && logs.length === 0 && <StateMessage variant="empty">Chưa có nhật ký. Hãy nạp dữ liệu vào cơ sở dữ liệu.</StateMessage>}
+          {!loading && !error && logs.length > 0 && filteredLogs.length === 0 && <StateMessage variant="empty">Không có nhật ký khớp bộ lọc.</StateMessage>}
           <DataTable<EventLogItem>
             columns={logColumns}
             rows={filteredLogs}
@@ -187,26 +188,6 @@ export function LogsPage() {
   );
 }
 
-function matchesDatasetTimeRange(value: string | undefined, allValues: (string | undefined)[], range: string) {
-  if (range === 'all') return true;
-  const current = parseTime(value);
-  if (!current) return false;
-  const maxTime = Math.max(...allValues.map((item) => parseTime(item)?.getTime() ?? 0));
-  if (!maxTime) return true;
-  const hours = range === '24h' ? 24 : range === '7d' ? 24 * 7 : 24 * 30;
-  return current.getTime() >= maxTime - hours * 60 * 60 * 1000;
-}
-
 function getLogKey(log: EventLogItem) {
-  // Use the unique event_logs primary key from the database.
-  // The composite key (timestamp + eventType + user + device + resource)
-  // can collide when multiple events share the same fields, causing
-  // React to render stale or duplicate rows.
   return log.id ?? `${log.timestamp}-${log.eventType}-${log.userId ?? log.user ?? ''}-${log.deviceId ?? log.device ?? ''}-${log.resource ?? ''}`;
-}
-
-function parseTime(value: string | undefined) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }

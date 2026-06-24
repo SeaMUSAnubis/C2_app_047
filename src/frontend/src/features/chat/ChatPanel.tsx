@@ -30,29 +30,29 @@ export function ChatPanel({ alertId, alertTitle, severity, onClose, onOpenFeedba
 
   return (
     <aside className="chat-panel" role="complementary" aria-label="Chat với AI">
-      <div className="chat-conversation-list">
-        <div className="chat-conversation-head">
-          <span>Đoạn chat</span>
-          <button type="button" onClick={() => void createConversation(alertId, alertTitle)}>
-            Mới
-          </button>
-        </div>
-        <div className="chat-conversation-items">
-          {conversations.length === 0 ? (
-            <p>Chưa có đoạn chat.</p>
-          ) : conversations.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={item.id === conversationId ? 'active' : ''}
-              onClick={() => void loadConversation(alertId, item.id)}
-            >
-              <strong>{item.title}</strong>
-              <span>{item.message_count} tin nhắn</span>
+      {conversations.length > 1 && (
+        <div className="chat-conversation-list">
+          <div className="chat-conversation-head">
+            <span>Đoạn chat</span>
+            <button type="button" onClick={() => void createConversation(alertId, alertTitle)}>
+              Mới
             </button>
-          ))}
+          </div>
+          <div className="chat-conversation-items">
+            {conversations.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={item.id === conversationId ? 'active' : ''}
+                onClick={() => void loadConversation(alertId, item.id)}
+              >
+                <strong>{item.title}</strong>
+                <span>{item.message_count} tin nhắn</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="chat-main-pane">
         <ChatHeader
           alertId={alertId}
