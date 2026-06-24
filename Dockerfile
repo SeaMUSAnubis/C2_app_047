@@ -46,9 +46,13 @@ COPY --from=frontend-builder /frontend/dist ./src/frontend/dist
 
 # Entrypoint script — strip Windows CR characters so the script runs even
 # when the repo was checked out with CRLF on a Windows host.
+# Using 'tr -d' (POSIX) instead of 'sed' because GNU sed vs BSD sed behave
+# differently with \r, and busybox sed (Alpine) may not support it at all.
 COPY scripts/docker/all_in_one_entrypoint.sh /usr/local/bin/all_in_one_entrypoint.sh
-RUN sed -i 's/\r$//' /usr/local/bin/all_in_one_entrypoint.sh \
-    && chmod +x /usr/local/bin/all_in_one_entrypoint.sh
+RUN tr -d '\r' < /usr/local/bin/all_in_one_entrypoint.sh > /tmp/entrypoint_clean \
+    && mv /tmp/entrypoint_clean /usr/local/bin/all_in_one_entrypoint.sh \
+    && chmod +x /usr/local/bin/all_in_one_entrypoint.sh \
+    && echo "[dockerfile] entrypoint CRLF check: $(file /usr/local/bin/all_in_one_entrypoint.sh)"
 
 EXPOSE 8000 5432
 

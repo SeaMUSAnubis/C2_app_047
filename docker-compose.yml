@@ -1,9 +1,13 @@
 # ── docker-compose.yml ──────────────────────────────────────────────────
-# Works on Linux, Windows (Docker Desktop + WSL2), and macOS.
+# Works on Linux, Windows (Docker Desktop), and macOS.
 #
-# Windows users: clone this repo inside WSL2 (e.g. /home/.../project) for
-# best bind-mount performance. Mounts from the Windows filesystem (C:\...)
-# work but are significantly slower.
+# PostgreSQL data uses a NAMED VOLUME (postgres_data) so it stays on a
+# Linux-native filesystem inside the Docker VM. That avoids the NTFS
+# permission errors you hit when bind-mounting pgdata from a Windows host.
+#
+# Windows users: for best bind-mount performance on the source-code
+# volumes, clone this repo inside WSL2 and run docker compose from there.
+# Running from C:\ still works; the source mounts are just slower.
 
 services:
   app:
@@ -34,7 +38,10 @@ services:
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-small-latest}
       MISTRAL_CHAT_COMPLETIONS_URL: ${MISTRAL_CHAT_COMPLETIONS_URL:-https://api.mistral.ai/v1/chat/completions}
     volumes:
-      - ./.docker/postgres_data:/var/lib/postgresql/data
+      # ── Named volume: Linux-native fs → PostgreSQL works on any host ──
+      - postgres_data:/var/lib/postgresql/data
+
+      # ── Bind mounts: app source, data, artifacts ────────────────────
       - ./artifacts:/app/artifacts
       - ./data:/app/data:ro
       - ./eval:/app/eval
@@ -46,3 +53,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+# ── Named volumes (managed by Docker — works on all platforms) ──────────
+volumes:
+  postgres_data:
+    # Linux:   stored in /var/lib/docker/volumes/…
+    # Windows: stored in the Docker Desktop VM – avoids NTFS permission bugs
+    driver: local
