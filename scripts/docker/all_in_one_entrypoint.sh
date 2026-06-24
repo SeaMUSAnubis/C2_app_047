@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # ── all_in_one_entrypoint.sh ────────────────────────────────────────────
 # Starts PostgreSQL, initialises the DB, then launches the FastAPI app.
-# Runs inside the all-in-one Docker image on Linux, Windows (WSL2), macOS.
+# Runs inside the all-in-one Docker image on Linux, Windows, macOS.
 set -euo pipefail
 
-# ── Strip CR characters (defence in depth when repo is cloned on Windows)
-# The Dockerfile already does this, but this guard catches any edge case.
+# ── CRLF guard ──────────────────────────────────────────────────────────
+# If this script contains carriage returns (Windows CRLF checkout), strip
+# them and re-execute. We stream through 'tr' into a new bash process so
+# we never modify the on-disk file (which may be read-only inside the
+# container). The Dockerfile also strips CR with 'tr' at build time — this
+# is a defence-in-depth fallback for edge cases (e.g. bind-mount override).
 if grep -q $'\r' "$0" 2>/dev/null; then
-    sed -i 's/\r$//' "$0"
-    exec bash "$0" "$@"
+    echo "[entrypoint] CRLF detected — re-executing with stripped line endings" >&2
+    tr -d '\r' < "$0" | exec bash -s "$@"
 fi
 
 PGDATA="${PGDATA:-/var/lib/postgresql/data}"
@@ -18,7 +22,7 @@ POSTGRES_DB="${POSTGRES_DB:-ueba_db}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 
 # ── Locate PostgreSQL binaries ──────────────────────────────────────────
-# Uses -exec dirname (POSIX) instead of -printf (GNU only) for portability.
+# Uses -exec dirname (POSIX) instead of -printf (GNU only).
 POSTGRES_BIN_DIR="$(
     find /usr/lib/postgresql -type f -name initdb \
         -exec dirname {} \; 2>/dev/null \
@@ -37,15 +41,24 @@ fi
 
 if [[ -z "${POSTGRES_BIN_DIR}" ]]; then
     echo "ERROR: Cannot find PostgreSQL binaries (initdb) in /usr/lib/postgresql." >&2
-    echo "Is the 'postgresql' package installed?" >&2
+    echo "Installed PostgreSQL packages:" >&2
+    dpkg -l | grep -i postgres 2>/dev/null || true
     exit 1
 fi
 
-echo "[entrypoint] Using PostgreSQL binaries from: ${POSTGRES_BIN_DIR}"
+echo "[entrypoint] PostgreSQL binary dir : ${POSTGRES_BIN_DIR}"
 
 # ── Init data directory ─────────────────────────────────────────────────
 mkdir -p "${PGDATA}"
-chown -R postgres:postgres "${PGDATA}"
+
+# chown may fail on bind mounts from Windows hosts (NTFS doesn't support
+# Linux ownership). That's fine — the named volume in docker-compose.yml
+# avoids this, but we guard anyway for custom setups.
+if ! chown -R postgres:postgres "${PGDATA}" 2>/dev/null; then
+    echo "[entrypoint] WARNING: chown failed on ${PGDATA}" >&2
+    echo "[entrypoint] If you are using a Windows bind mount, switch to the" >&2
+    echo "[entrypoint] named volume 'postgres_data' defined in docker-compose.yml." >&2
+fi
 
 if [[ ! -s "${PGDATA}/PG_VERSION" ]]; then
     echo "[entrypoint] Initialising PostgreSQL data directory at ${PGDATA} ..."
@@ -60,12 +73,12 @@ if [[ ! -s "${PGDATA}/PG_VERSION" ]]; then
     } >> "${PGDATA}/pg_hba.conf"
 fi
 
-# Fix locale references (the C.UTF-8 locale is always available on Debian)
+# Fix locale references (C.UTF-8 is always available on Debian)
 sed -i \
     -e "s/en_US\.utf8/C.UTF-8/g" \
     -e "s/en_US\.UTF-8/C.UTF-8/g" \
-    "${PGDATA}/postgresql.conf"
-chown postgres:postgres "${PGDATA}/postgresql.conf"
+    "${PGDATA}/postgresql.conf" 2>/dev/null || true
+chown postgres:postgres "${PGDATA}/postgresql.conf" 2>/dev/null || true
 
 # ── Start PostgreSQL ────────────────────────────────────────────────────
 echo "[entrypoint] Starting PostgreSQL on port ${POSTGRES_PORT} ..."
