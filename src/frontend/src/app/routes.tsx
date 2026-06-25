@@ -1,13 +1,13 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
-import { LoginPage } from '../pages/LoginPage';
-import { DashboardPage } from '../pages/DashboardPage';
+import LoginPage from '../pages/LoginPage';
+import DashboardPage from '../pages/DashboardPage';
 import { UsersPage } from '../pages/UsersPage';
 import { DevicesPage } from '../pages/DevicesPage';
 import { LogsPage } from '../pages/LogsPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
-import { AlertsPage } from '../pages/AlertsPage';
+import AlertsPage from '../pages/AlertsPage';
 import { DataImportPage } from '../pages/DataImportPage';
 import { ModelsPage } from '../pages/ModelsPage';
 import { APP_ROUTES } from '../lib/constants';
