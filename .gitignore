@@ -68,4 +68,5 @@ node_modules/
 .next/
 out/
 .nuxt/
-frontend/
+/frontend/
+/ueba-backend_c2_app_/
