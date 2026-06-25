@@ -1,0 +1,64 @@
+[Unit]
+Description=UEBA Endpoint Agent
+Documentation=https://github.com/vespionage/ueba-endpoint-monitoring
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The agent runs as a non-privileged user. Root is only needed for the
+# /var/log/wtmp reader on Linux; the rest of the collectors (USB, file,
+# process, network) work fine without privileges.
+User=ueba-agent
+Group=ueba-agent
+WorkingDirectory=/var/lib/ueba-agent
+StateDirectory=ueba-agent
+LogsDirectory=ueba-agent
+ConfigurationDirectory=ueba-agent
+
+# Pre-restart: 3 seconds so the SQLite buffer can flush pending events
+# via SIGTERM handler (the service stops collectors first, then final-flushes).
+ExecStart=/usr/bin/env agent run \
+    --state-path /var/lib/ueba-agent/state.json \
+    --buffer-path /var/lib/ueba-agent/buffer.db \
+    --log-path /var/log/ueba-agent/agent.log
+
+# Auto-restart on crash, but not on clean stop (so admin `systemctl stop`
+# stays stopped). Restart=always for production safety.
+Restart=always
+RestartSec=5
+StartLimitBurst=10
+StartLimitIntervalSec=120
+
+# Graceful shutdown — send SIGTERM first, escalate to SIGKILL after 30s.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+FinalKillSignal=SIGKILL
+
+# Hardening (defense in depth — the agent already validates inputs server-side).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/ueba-agent /var/log/ueba-agent
+# /var/log/wtmp is world-readable by default on most distros; allow read.
+ReadOnlyPaths=/var/log/wtmp
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Allow outbound HTTPS only — agent only talks to the server.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+# Resource limits.
+LimitNOFILE=8192
+MemoryMax=512M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

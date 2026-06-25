@@ -4,7 +4,7 @@ Date: 2026-06-13
 
 ## Source Reviewed
 
-- Read `docs/planning/047_UEBA.xlsx`.
+- Read `docs/047_UEBA.xlsx`.
 - Relevant assigned owner: Bui Hoang Linh - Backend/DevOps Engineer.
 - Current Sprint 3 assigned tasks:
   - `T-007`: DB schema + migration/seed.
@@ -35,7 +35,7 @@ Date: 2026-06-13
   - `GET /api/logs`
 - Added admin-only RBAC for user/device create and update.
 - Added normalized log ingest upsert by `source_id` to reduce duplicate import risk.
-- Updated `docs/contracts/API_CONTRACT.md` with implemented request/response examples.
+- Updated `docs/API_CONTRACT.md` with implemented request/response examples.
 - Added backend env settings to `.env.example`.
 - Added API tests for health, login, auth protection, RBAC, seed reads, and idempotent log ingest.
 - Migrated runtime persistence away from SQLite to PostgreSQL using `DATABASE_URL`.
@@ -62,7 +62,7 @@ Date: 2026-06-13
 
 ## Notes
 
-- The workbook filename in the request was `047_UEBA.xlxs`, but the actual file is `docs/planning/047_UEBA.xlsx`.
+- The workbook filename in the request was `047_UEBA.xlxs`, but the actual file is `docs/047_UEBA.xlsx`.
 - The workbook itself was not modified.
 - SQLite is no longer used by backend runtime or tests.
 

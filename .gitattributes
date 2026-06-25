@@ -1,0 +1,35 @@
+# Auto-detect text files and normalize to LF in the repository.
+# On checkout, Git converts to the platform's native line ending (CRLF on Windows).
+# This is fine for most source files, but shell scripts and Dockerfiles MUST use LF
+# even on Windows, or they will break inside Linux containers.
+* text=auto
+
+# Shell scripts — must remain LF inside Linux containers
+*.sh        text eol=lf
+
+# Docker ecosystem — must remain LF
+Dockerfile*   text eol=lf
+.dockerignore text eol=lf
+docker-compose*.yml  text eol=lf
+
+# Python — LF is safe and conventional
+*.py        text eol=lf
+
+# Config / dotenv / env files
+*.env       text eol=lf
+*.conf      text eol=lf
+
+# Binary files (do not normalize)
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.joblib    binary
+*.pkl       binary
+*.gz        binary
+*.zip       binary
+*.tar       binary
+*.db        binary
+*.sqlite3   binary

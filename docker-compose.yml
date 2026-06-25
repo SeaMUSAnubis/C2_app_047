@@ -1,49 +1,62 @@
+# ── docker-compose.yml ──────────────────────────────────────────────────
+# Works on Linux, Windows (Docker Desktop), and macOS.
+#
+# PostgreSQL data uses a NAMED VOLUME (postgres_data) so it stays on a
+# Linux-native filesystem inside the Docker VM. That avoids the NTFS
+# permission errors you hit when bind-mounting pgdata from a Windows host.
+#
+# Windows users: for best bind-mount performance on the source-code
+# volumes, clone this repo inside WSL2 and run docker compose from there.
+# Running from C:\ still works; the source mounts are just slower.
+
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ueba
-      POSTGRES_USER: ueba
-      POSTGRES_PASSWORD: ueba
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ueba -d ueba"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://ueba:ueba@db:5432/ueba
-      MODEL_PATH: /app/Weight/ocsvm_cert_r42_chunked.joblib
-      DATA_DIR: /app/Data/data_demo
-      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - ./data:/app/data
-      - ./artifacts:/app/artifacts
-      - d:/2 Code/TEAM_O47/Weight:/app/Weight
-      - d:/2 Code/TEAM_O47/Data:/app/Data
-
-  frontend:
+  app:
     build:
-      context: ./src/frontend
+      context: .
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     ports:
-      - "80:80"
-    depends_on:
-      - api
+      - "${FRONTEND_PORT:-5173}:8000"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ueba_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ueba_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ueba_db}
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 5432
+      PGDATA: /var/lib/postgresql/data/app_pg17
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ueba_user}:${POSTGRES_PASSWORD:-ueba_password}@127.0.0.1:5432/${POSTGRES_DB:-ueba_db}
+      FRONTEND_DIST_DIR: /app/src/frontend/dist
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      CORS_ORIGINS: http://localhost:${BACKEND_PORT:-8000},http://127.0.0.1:${BACKEND_PORT:-8000},http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173}
+      OCSVM_MODEL_PATH: /app/src/ml/weights/ocsvm_cert_r42_chunked.joblib
+      ML_MODEL_PATH: /app/src/ml/weights
+      ML_ARTIFACT_PATH: /app/artifacts
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_MINUTES: ${JWT_EXPIRES_MINUTES:-480}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-small-latest}
+      MISTRAL_CHAT_COMPLETIONS_URL: ${MISTRAL_CHAT_COMPLETIONS_URL:-https://api.mistral.ai/v1/chat/completions}
+    volumes:
+      # ── Named volume: Linux-native fs → PostgreSQL works on any host ──
+      - postgres_data:/var/lib/postgresql/data
 
+      # ── Bind mounts: app source, data, artifacts ────────────────────
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data:ro
+      - ./eval:/app/eval
+      - ./src/backend/app:/app/src/backend/app
+      - ./requirements.txt:/app/requirements.txt:ro
+      - ./src/ml:/app/src/ml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
+# ── Named volumes (managed by Docker — works on all platforms) ──────────
 volumes:
   postgres_data:
+    # Linux:   stored in /var/lib/docker/volumes/…
+    # Windows: stored in the Docker Desktop VM – avoids NTFS permission bugs
+    driver: local

@@ -38,14 +38,21 @@ Thumbs.db
 .ai-log/archive/
 AGENTS.md
 
-# Data and generated artifacts
-/data/
+# Data and generated artifacts.
+#
+# The synthetic mock dataset under data/mock/ is whitelisted so manual
+# testers can pull the repo and import without re-running
+# generate_mock_data.py. All other data/ subdirs (raw, sample, demo,
+# interim, processed) stay local-only.
+
+/data/*
+!/data/mock/
 /artifacts/
 /logs/
 *.log
 *.db
 *.sqlite3
-weights/
+/weights/
 
 # Test coverage
 htmlcov/
@@ -54,9 +61,11 @@ coverage.xml
 
 # Docker
 docker-compose.override.yml
+.docker/
 
 # Node/frontend
 node_modules/
 .next/
 out/
 .nuxt/
+frontend/

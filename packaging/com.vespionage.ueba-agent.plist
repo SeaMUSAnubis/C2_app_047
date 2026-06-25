@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vespionage.ueba-agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/agent</string>
+        <string>run</string>
+        <string>--state-path</string>
+        <string>/var/lib/ueba-agent/state.json</string>
+        <string>--buffer-path</string>
+        <string>/var/lib/ueba-agent/buffer.db</string>
+        <string>--log-path</string>
+        <string>/var/log/ueba-agent/agent.log</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/var/log/ueba-agent/agent.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/var/log/ueba-agent/agent.err.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/var/lib/ueba-agent</string>
+
+    <key>UserName</key>
+    <string>ueba-agent</string>
+
+    <key>GroupName</key>
+    <string>ueba-agent</string>
+</dict>
+</plist>
