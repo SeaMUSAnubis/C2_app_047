@@ -161,7 +161,26 @@ def test_stats_record_and_snapshot() -> None:
     assert snap["total_input_tokens"] == 10
     assert snap["total_output_tokens"] == 20
     assert snap["avg_latency_ms"] == 150.0
+    assert "total_estimated_cost" in snap
     assert len(snap["recent"]) == 2
+
+
+def test_stats_estimates_cost_from_configured_rates(monkeypatch) -> None:
+    from src.backend.app.config import settings
+
+    monkeypatch.setattr(settings, "llm_input_cost_per_1m_tokens", 0.25)
+    monkeypatch.setattr(settings, "llm_output_cost_per_1m_tokens", 2.0)
+    monkeypatch.setattr(settings, "llm_cost_currency", "USD")
+
+    s = stats.LLMCallStats()
+    s.record(provider="p", model="m", latency_ms=50, status="ok", tokens_in=1_000_000, tokens_out=500_000)
+    snap = s.get_stats()
+
+    assert snap["input_cost_per_1m_tokens"] == 0.25
+    assert snap["output_cost_per_1m_tokens"] == 2.0
+    assert snap["total_estimated_cost"] == 1.25
+    assert snap["cost_currency"] == "USD"
+    assert snap["recent"][-1]["estimated_cost"] == 1.25
 
 
 # ---------- provider factory ----------

@@ -2,6 +2,8 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from src.models.explanation import AlertExplanationRequest
 from src.services.llm.explanation_service import generate_explanation
 
@@ -49,6 +51,4 @@ def evaluate():
         sys.exit(1)
 
 if __name__ == "__main__":
-    # Ensure src is in python path
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     evaluate()

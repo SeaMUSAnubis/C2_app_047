@@ -94,7 +94,7 @@ def test_chat_event_to_dict() -> None:
 
 
 @pytest.mark.skipif(not postgres_tests_enabled(), reason="TEST_DATABASE_URL not set")
-def test_get_or_create_conversation_idempotent(db_setup) -> None:
+def test_get_or_create_conversation_creates_thread(db_setup) -> None:
     from src.backend.app.db import session as db
     from src.backend.app.services.llm_chat import get_or_create_conversation
 
@@ -106,8 +106,8 @@ def test_get_or_create_conversation_idempotent(db_setup) -> None:
             ("U-chat-1", "chat_user", "Chat User"),
         )
         conn.execute(
-            "INSERT INTO alerts (user_id, title, severity, risk_score, status) "
-            "VALUES (%s, %s, %s, %s, 'new')",
+            "INSERT INTO alerts (user_id, title, severity, risk_score, status, detected_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, 'new', NOW(), NOW())",
             ("U-chat-1", "chat test", "low", 50),
         )
         alert_id = conn.execute(
@@ -117,6 +117,6 @@ def test_get_or_create_conversation_idempotent(db_setup) -> None:
 
     c1 = get_or_create_conversation(alert_id=alert_id, user_id="U-chat-1", title="t1")
     c2 = get_or_create_conversation(alert_id=alert_id, user_id="U-chat-1", title="t2")
-    assert c1["id"] == c2["id"]
-    # second call returns existing, doesn't overwrite title
-    assert c2["title"] == "t1"
+    assert c1["id"] != c2["id"]
+    assert c1["title"] == "t1"
+    assert c2["title"] == "t2"

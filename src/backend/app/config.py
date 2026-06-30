@@ -92,6 +92,13 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=30.0, alias="LLM_TIMEOUT_SECONDS")
     llm_chat_enabled: bool = Field(default=True, alias="LLM_CHAT_ENABLED")
     llm_default_language: str = Field(default="vi", alias="LLM_DEFAULT_LANGUAGE")
+    llm_cost_currency: str = Field(default="USD", alias="LLM_COST_CURRENCY")
+    llm_input_cost_per_1m_tokens: float = Field(
+        default=0.0, alias="LLM_INPUT_COST_PER_1M_TOKENS"
+    )
+    llm_output_cost_per_1m_tokens: float = Field(
+        default=0.0, alias="LLM_OUTPUT_COST_PER_1M_TOKENS"
+    )
     llm_chat_max_context_messages: int = Field(
         default=20, alias="LLM_CHAT_MAX_CONTEXT_MESSAGES"
     )

@@ -584,6 +584,10 @@ export interface LLMStats {
   total_retries: number;
   total_input_tokens: number;
   total_output_tokens: number;
+  input_cost_per_1m_tokens: number;
+  output_cost_per_1m_tokens: number;
+  total_estimated_cost: number;
+  cost_currency: string;
   avg_latency_ms: number;
   model: string;
   provider: string;
@@ -594,6 +598,9 @@ export interface LLMStats {
     latency_ms: number;
     status: string;
     fallback_reason: string | null;
+    tokens_in: number;
+    tokens_out: number;
+    estimated_cost: number;
     streamed: boolean;
   }>;
 }

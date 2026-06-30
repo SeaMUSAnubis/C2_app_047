@@ -119,8 +119,8 @@ def test_feedback_auto_writes_memory(db_setup):
             ("U-fb-1", "fb_user_1", "FB User 1"),
         )
         conn.execute(
-            "INSERT INTO alerts (user_id, title, severity, risk_score, status) "
-            "VALUES (%s, %s, %s, %s, 'new') RETURNING id",
+            "INSERT INTO alerts (user_id, title, severity, risk_score, status, detected_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, 'new', NOW(), NOW()) RETURNING id",
             ("U-fb-1", "test alert for feedback", "high", 80),
         )
         alert_id_row = conn.execute(

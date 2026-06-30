@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, Brain, Cpu, Database } from 'lucide-react';
+import { Activity, Brain, Cpu, Database, DollarSign } from 'lucide-react';
 import {
   forgetMemory,
   getLLMStats,
@@ -14,6 +14,15 @@ import {
 
 const SCOPES: MemoryScope[] = ['user', 'device', 'pattern', 'global'];
 const KINDS: MemoryKind[] = ['fact', 'preference', 'analyst_pattern', 'historical'];
+
+function formatCost(value: number | undefined, currency: string | undefined): string {
+  const amount = value ?? 0;
+  const unit = currency || 'USD';
+  return `${amount.toLocaleString(undefined, {
+    minimumFractionDigits: amount > 0 && amount < 0.01 ? 6 : 2,
+    maximumFractionDigits: 6,
+  })} ${unit}`;
+}
 
 export function MemoryAdminPage() {
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
@@ -102,6 +111,14 @@ export function MemoryAdminPage() {
           </strong>
           <span>
             vào {llmStats?.total_input_tokens ?? 0} / ra {llmStats?.total_output_tokens ?? 0}
+          </span>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon"><DollarSign size={22} /></div>
+          <p>Chi phí LLM</p>
+          <strong>{formatCost(llmStats?.total_estimated_cost, llmStats?.cost_currency)}</strong>
+          <span>
+            {llmStats?.input_cost_per_1m_tokens ?? 0}/{llmStats?.output_cost_per_1m_tokens ?? 0} mỗi 1M token
           </span>
         </div>
         <div className="stat-card tone-orange">

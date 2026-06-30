@@ -117,7 +117,10 @@ def init_pool() -> None:
             configure=_configure_connection,
             open=False,  # open lazily on first checkout, lifespan can warm up via .wait()
             name="ueba-backend",
-            kwargs={"row_factory": None},  # session.py uses dict_row via per-conn cursor
+            # Supabase/PgBouncer transaction poolers can reuse server-side
+            # connection state across clients; disabling prepared statements
+            # avoids DuplicatePreparedStatement errors.
+            kwargs={"row_factory": None, "prepare_threshold": None},
         )
         try:
             _pool.open()

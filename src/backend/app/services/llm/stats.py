@@ -49,16 +49,17 @@ class LLMCallStats:
         tokens_out: int | None = None,
         streamed: bool = False,
     ) -> None:
+        tokens_in_value = max(0, tokens_in or 0)
+        tokens_out_value = max(0, tokens_out or 0)
+        estimated_cost = estimate_llm_cost(tokens_in_value, tokens_out_value)
         with self._lock:
             self._stats.total_calls += 1
             if streamed:
                 self._stats.total_streamed_calls += 1
             if status != "ok":
                 self._stats.total_fallback += 1
-            if tokens_in is not None:
-                self._stats.total_input_tokens += tokens_in
-            if tokens_out is not None:
-                self._stats.total_output_tokens += tokens_out
+            self._stats.total_input_tokens += tokens_in_value
+            self._stats.total_output_tokens += tokens_out_value
             self._stats.total_latency_ms_sum += max(0, latency_ms)
             self._stats.recent.append(
                 {
@@ -67,6 +68,9 @@ class LLMCallStats:
                     "latency_ms": latency_ms,
                     "status": status,
                     "fallback_reason": fallback_reason,
+                    "tokens_in": tokens_in_value,
+                    "tokens_out": tokens_out_value,
+                    "estimated_cost": estimated_cost,
                     "streamed": streamed,
                 }
             )
@@ -77,6 +81,9 @@ class LLMCallStats:
             avg_latency = (
                 s.total_latency_ms_sum / s.total_calls if s.total_calls else 0
             )
+            total_estimated_cost = estimate_llm_cost(
+                s.total_input_tokens, s.total_output_tokens
+            )
             return {
                 "total_calls": s.total_calls,
                 "total_streamed_calls": s.total_streamed_calls,
@@ -84,6 +91,10 @@ class LLMCallStats:
                 "total_retries": s.total_retries,
                 "total_input_tokens": s.total_input_tokens,
                 "total_output_tokens": s.total_output_tokens,
+                "input_cost_per_1m_tokens": settings.llm_input_cost_per_1m_tokens,
+                "output_cost_per_1m_tokens": settings.llm_output_cost_per_1m_tokens,
+                "total_estimated_cost": total_estimated_cost,
+                "cost_currency": settings.llm_cost_currency,
                 "avg_latency_ms": round(avg_latency, 1),
                 "model": settings.llm_chat_model,
                 "provider": settings.llm_provider,
@@ -95,6 +106,13 @@ class LLMCallStats:
 # Module-level singleton.
 _stats_instance: LLMCallStats | None = None
 _stats_lock = threading.Lock()
+
+
+def estimate_llm_cost(tokens_in: int, tokens_out: int) -> float:
+    """Estimate provider spend from token usage and configured per-1M rates."""
+    input_cost = (max(0, tokens_in) / 1_000_000) * settings.llm_input_cost_per_1m_tokens
+    output_cost = (max(0, tokens_out) / 1_000_000) * settings.llm_output_cost_per_1m_tokens
+    return round(input_cost + output_cost, 8)
 
 
 def get_stats() -> LLMCallStats:
